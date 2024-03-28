@@ -626,7 +626,7 @@ class AudioRecorder:
                 if audio:
                     save_audio_to_file(wav_audio, "input", "wav")
 
-        print(f"# Phrase recognition time limit is set to {phrase_time_limit} seconds.")
+        print(f"# Phrase recognition min time length is set to {phrase_time_limit} seconds.")
         self.stop_listening = self.recognizer.listen_in_background(self.microphone, callback, phrase_time_limit=phrase_time_limit)
 
         print("# Listening started. Feel free to speak your thoughts aloud.")
