@@ -1,0 +1,8 @@
+anthropic
+colorama
+keyboard
+python-dotenv
+SpeechRecognition
+websockets
+pyaudio
+pydub
