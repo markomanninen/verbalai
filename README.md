@@ -83,7 +83,7 @@ Contributions are welcome! If you find any issues or have suggestions for improv
 
 ## Developer notes
 
-
+**Note:** The package may not run smoothly in a WSL (Windows Subsystem for Linux) environment due to conflicts between the audio drivers of Linux and Windows.
 
 ## Acknowledgements
 
