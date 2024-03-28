@@ -2,6 +2,8 @@
 
 VerbalAI is a near to real-time bidirectional voice AI chatbot implemented as a command-line tool. It utilizes voice-to-text recognition, GPT language model, and text-to-speech service to enable interactive conversations with an AI assistant.
 
+![verbalai.png](verbalai.png)
+
 ## Features
 
 - Voice-to-text recognition using Google Speech Recognition library (free)
@@ -60,7 +62,7 @@ The chatbot will immediatelly start listening for voice input. You can interact 
 
 ## Customization
 
-You can customize various settings of the VerbalAI chatbot by modifying the command-line arguments. Run `verbalai --help` to see the available options.
+You can customize various settings of the VerbalAI chatbot by modifying the command-line arguments.
 
 Some notable options include:
 - `-l, --language`: Set the language code for speech recognition (default: en-US)
@@ -78,6 +80,10 @@ This project is licensed under the [MIT License](LICENSE).
 ## Contributing
 
 Contributions are welcome! If you find any issues or have suggestions for improvements, please open an issue or submit a pull request.
+
+## Developer notes
+
+
 
 ## Acknowledgements
 
