@@ -11,7 +11,7 @@ from queue import Empty
 from typing import Iterator
 from threading import Thread
 from anthropic import Anthropic
-from elevenlabsio import ElevenlabsIO
+from .elevenlabsio import ElevenlabsIO
 from multiprocessing import Process, Queue
 from colorama import init, Fore, Style, Back
 from speech_recognition import Recognizer, Microphone, AudioData, UnknownValueError, RequestError
