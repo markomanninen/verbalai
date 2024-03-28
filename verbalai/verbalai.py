@@ -152,9 +152,12 @@ def freeze_cursor():
 
 def prompt(text, final=False):
     """
-    Processes and displays a given text input in the chat system, and optionally initiates a text-to-speech conversion of the generated response.
+    Processes and displays a given text input in the chat system, and optionally 
+    initiates a text-to-speech conversion of the generated response.
 
-    This function modifies the global chat history, updates message counters, and manages the interaction with the GPT API for generating responses. It conditionally triggers a text-to-speech conversion for the final response.
+    This function modifies the global chat history, updates message counters, and 
+    manages the interaction with the GPT API for generating responses. It conditionally 
+    triggers a text-to-speech conversion for the final response.
 
     Parameters:
     - text (str): The input text to be processed and added to the chat history.
@@ -164,17 +167,21 @@ def prompt(text, final=False):
       Defaults to False.
 
     Global Variables:
-    - inference_message_word_count (int): A counter for the total word count of messages processed.
-                                          This is a direct indication of the GPT API usage and relates to context window size and token limits.
+    - inference_message_word_count (int): A counter for the total word count of messages 
+                                          processed. This is a direct indication of the 
+                                          GPT API usage and relates to context window size 
+                                          and token limits.
     - gpt_model: The GPT model used for generating responses.
     - system_message (str): Template for system messages including current mode 
                             and user information.
-    - messages (list): The history of messages in the chat, both from the user and the system.
+    - messages (list): The history of messages in the chat, both from the user and the 
+                       system.
     - short_mode (str): The operation mode for non-final inputs.
     - long_mode (str): The operation mode for final inputs.
     - username (str): The name of the user in the chat.
     - response_token_limit (int): The maximum number of tokens for a final response.
-    - feedback_token_limit (int): The maximum number of tokens for a non-final feedback response.
+    - feedback_token_limit (int): The maximum number of tokens for a non-final feedback 
+                                  response.
     - voice_model_id (str): The ID of the voice model used for text-to-speech conversion.
 
     Returns:
@@ -279,20 +286,28 @@ def prompt(text, final=False):
 
 def save_audio_to_file(audio_data, prefix="output", extension="mp3"):
     """
-    Saves the provided audio data to a file within a session-specific directory, uniquely naming the file based on a prefix, a sequential number, and a specified file extension.
+    Saves the provided audio data to a file within a session-specific directory, uniquely 
+    naming the file based on a prefix, a sequential number, and a specified file extension.
     
-    This function examines the existing files within the session directory that match the provided prefix and extension. It then determines the next available sequential number to use in the filename to ensure uniqueness. The audio data is written to this newly named file in binary mode.
+    This function examines the existing files within the session directory that match the 
+    provided prefix and extension. It then determines the next available sequential number 
+    to use in the filename to ensure uniqueness. The audio data is written to this newly 
+    named file in binary mode.
 
     Parameters:
     - audio_data (bytes): The binary audio data to be saved.
     - prefix (str, optional): The prefix to be used for the filename. Defaults to "output".
-    - extension (str, optional): The file extension (type) for the audio file. Defaults to "mp3".
+    - extension (str, optional): The file extension (type) for the audio file. Defaults 
+                                 to "mp3".
 
     Global Variables:
-    - audio_recorder: A global object that contains information about the current audio session,
-                      including the directory where audio files are stored (`session_dir`).
+    - audio_recorder: A global object that contains information about the current audio 
+                      session, including the directory where audio files are stored 
+                      (`session_dir`).
 
-    The function constructs the filename as follows: "{prefix}-{n}.{extension}", where {n} is the next available sequential number. This file is then saved to the session directory specified by `audio_recorder.session_dir`.
+    The function constructs the filename as follows: "{prefix}-{n}.{extension}", where 
+    {n} is the next available sequential number. This file is then saved to the session 
+    directory specified by `audio_recorder.session_dir`.
 
     No return value. The function directly writes the file to the disk.
     """
@@ -317,25 +332,35 @@ def save_audio_to_file(audio_data, prefix="output", extension="mp3"):
 
 def gpt_inference(text, final=False):
     """
-    Conducts GPT inference on the provided text prompt and logs the prompt, response, and metadata to a JSON Lines file within the session directory.
+    Conducts GPT inference on the provided text prompt and logs the prompt, response, 
+    and metadata to a JSON Lines file within the session directory.
 
-    This function executes GPT inference using the `prompt` function with the given text and a flag indicating whether it is a final prompt. If the inference is successful, the function logs the prompt, the GPT-generated response, the current timestamp, and the finality flag to a file named "inference.jsonl" in the session directory. Each log entry is a single line in JSON format. In case of an error during the inference process, the function prints the error message and, if debugging is enabled, the traceback.
+    This function executes GPT inference using the `prompt` function with the given text 
+    and a flag indicating whether it is a final prompt. If the inference is successful, 
+    the function logs the prompt, the GPT-generated response, the current timestamp, and 
+    the finality flag to a file named "inference.jsonl" in the session directory. Each 
+    log entry is a single line in JSON format. In case of an error during the inference 
+    process, the function prints the error message and, if debugging is enabled, the 
+    traceback.
 
     Parameters:
     - text (str): The input text prompt for GPT inference.
     - final (bool, optional): A flag indicating whether the prompt is considered final,
-                              affecting the response's mode of generation. Defaults to False.
+                              affecting the response's mode of generation. Defaults to 
+                              False.
 
     Global Variables:
     - audio_recorder: A global object that holds session-related information, including
                       the session directory path where logs are stored.
-    - verbose (bool): A global flag indicating whether debugging information should be printed,
-                      including tracebacks on error.
+    - verbose (bool): A global flag indicating whether debugging information should be 
+                      printed, including tracebacks on error.
 
     Returns:
     - bool: True if the GPT inference and logging were successful, False otherwise.
 
-    The function attempts to perform GPT inference and log the results. On failure, it catches any exceptions, optionally prints detailed error information depending on the verbose flag, and returns False. On success, it returns True.
+    The function attempts to perform GPT inference and log the results. On failure, it 
+    catches any exceptions, optionally prints detailed error information depending on 
+    the verbose flag, and returns False. On success, it returns True.
     """
     global audio_recorder, verbose
     try:
@@ -367,26 +392,28 @@ def process_text(text, word_buffer):
     when the buffer exceeds a specified limit.
 
     This function is designed to accumulate text inputs into a buffer until the buffer
-    reaches a predefined size limit. Once this limit is exceeded, it triggers a GPT inference
-    call with the accumulated text and then clears the buffer for new inputs. This approach
-    is useful for situations where text inputs are received piecemeal or in a streaming fashion,
-    and periodic processing is needed to generate intermediate feedback or responses based on
-    the accumulated text.
+    reaches a predefined size limit. Once this limit is exceeded, it triggers a GPT 
+    inference call with the accumulated text and then clears the buffer for new inputs. 
+    This approach is useful for situations where text inputs are received piecemeal or 
+    in a streaming fashion, and periodic processing is needed to generate intermediate 
+    feedback or responses based on the accumulated text.
 
     Parameters:
     - text (str): The input text to be processed.
-    - word_buffer (list): A buffer (list of words) where the words from the processed text are stored.
+    - word_buffer (list): A buffer (list of words) where the words from the processed 
+                          text are stored.
 
     Global Variables:
-    - feedback_word_buffer_limit (int): The maximum number of words allowed in the buffer before
-                                        triggering GPT inference.
+    - feedback_word_buffer_limit (int): The maximum number of words allowed in the 
+                                        buffer before triggering GPT inference.
 
-    The function first checks if the input text is non-empty and not just whitespace. If so, it
-    prints the text and adds its words to the word buffer. Then, it checks if the updated buffer
-    size exceeds the predefined limit. If the limit is exceeded, it concatenates the buffered words
-    into a single string and passes this string to the GPT inference function, specifying that the
-    response should be considered as intermediate feedback (not final). After inference, it clears
-    the buffer to reset the process for subsequent inputs.
+    The function first checks if the input text is non-empty and not just whitespace. 
+    If so, it prints the text and adds its words to the word buffer. Then, it checks if 
+    the updated buffer size exceeds the predefined limit. If the limit is exceeded, it 
+    concatenates the buffered words into a single string and passes this string to the 
+    GPT inference function, specifying that the response should be considered as 
+    intermediate feedback (not final). After inference, it clears the buffer to reset 
+    the process for subsequent inputs.
     """
     global feedback_word_buffer_limit
     if text.strip() != "":
@@ -401,21 +428,38 @@ def process_text(text, word_buffer):
 
 def audio_processing_worker(input_queue, language, text_queue):
     """
-    Processes audio data from an input queue using speech recognition and posts the resulting text to a text queue.
+    Processes audio data from an input queue using speech recognition and posts 
+    the resulting text to a text queue.
 
-    This worker function continuously retrieves audio data from an input queue, attempts to convert it to text using Google's Speech Recognition API, and then posts the recognized text to another queue for further processing. It supports graceful termination by listening for a specific termination message and handles exceptions related to speech recognition failures and request errors.
+    This worker function continuously retrieves audio data from an input queue, 
+    attempts to convert it to text using Google's Speech Recognition API, and 
+    then posts the recognized text to another queue for further processing. It 
+    supports graceful termination by listening for a specific termination message 
+    and handles exceptions related to speech recognition failures and request errors.
 
     Parameters:
-    - input_queue (queue.Queue): A queue from which audio data tuples are retrieved. Each tuple should
-      contain (audio data, sample rate, number of channels).
+    - input_queue (queue.Queue): A queue from which audio data tuples are retrieved. 
+                                 Each tuple should contain (audio data, sample rate, 
+                                 number of channels).
     - language (str): The language code to be used for speech recognition, e.g., 'en-US'.
     - text_queue (queue.Queue): A queue to which recognized text is posted.
 
-    The function operates in an infinite loop, continuously polling the input queue for new audio data until it encounters a termination message, "TERMINATE". Upon receiving audio data, it initializes an `AudioData` object and uses the `recognize_google` method of a `Recognizer` instance to perform speech recognition. Recognized text is then posted to the text_queue. The function handles several exceptions: it continues silently if the speech recognition service could not understand the audio (`UnknownValueError`), logs errors related to service requests (`RequestError`), and logs any other exceptions encountered during processing.
+    The function operates in an infinite loop, continuously polling the input queue 
+    for new audio data until it encounters a termination message, "TERMINATE". Upon 
+    receiving audio data, it initializes an `AudioData` object and uses the 
+    `recognize_google` method of a `Recognizer` instance to perform speech recognition. 
+    Recognized text is then posted to the text_queue. The function handles several 
+    exceptions: it continues silently if the speech recognition service could not 
+    understand the audio (`UnknownValueError`), logs errors related to service requests 
+    (`RequestError`), and logs any other exceptions encountered during processing.
 
     Use Cases:
-    - This function is designed to run in a separate thread or process, handling speech-to-text conversion in the background while the main application performs other tasks.
-    - Suitable for real-time or near-real-time audio processing applications, such as voice assistants, transcription services, or any system requiring asynchronous speech-to-text conversion.
+    - This function is designed to run in a separate thread or process, handling 
+      speech-to-text conversion in the background while the main application performs 
+      other tasks.
+    - Suitable for real-time or near-real-time audio processing applications, such as 
+      voice assistants, transcription services, or any system requiring asynchronous 
+      speech-to-text conversion.
     """
     recognizer = Recognizer()
     while True:
@@ -452,55 +496,82 @@ def invert_text(text):
 
 class AudioRecorder:
     """
-    A class designed to facilitate background audio recording and processing, converting spoken audio into text using speech recognition, and managing audio data for both real-time processing and archiving.
+    A class designed to facilitate background audio recording and processing, converting 
+    spoken audio into text using speech recognition, and managing audio data for both 
+    real-time processing and archiving.
 
-    The AudioRecorder class encapsulates functionality for capturing audio input from a microphone, processing the audio data to recognize speech, and handling the asynchronous flow of audio and text data through queues. It supports starting and stopping audio capture, dynamically adjusting for ambient noise, and processing audio input in real-time or near real-time. Additionally, it provides mechanisms for archiving captured audio data and cleanly terminating background processing tasks.
+    The AudioRecorder class encapsulates functionality for capturing audio input from a 
+    microphone, processing the audio data to recognize speech, and handling the 
+    asynchronous flow of audio and text data through queues. It supports starting and 
+    stopping audio capture, dynamically adjusting for ambient noise, and processing 
+    audio input in real-time or near real-time. Additionally, it provides mechanisms 
+    for archiving captured audio data and cleanly terminating background processing tasks.
 
     Attributes:
-    - recognizer (speech_recognition.Recognizer): An instance used for converting audio to text.
+    - recognizer (speech_recognition.Recognizer): An instance used for converting audio 
+                                                  to text.
     - language (str): The language code used for speech recognition.
     - audio_queue (queue.Queue): A queue for storing raw audio data to be processed.
-    - text_queue (queue.Queue): A queue for storing recognized text from processed audio data.
+    - text_queue (queue.Queue): A queue for storing recognized text from processed audio 
+                                data.
     - word_buffer (list): A buffer for accumulating recognized words for further processing.
-    - worker_process (multiprocessing.Process): A separate process for handling audio data conversion to text.
-    - active (bool): A flag indicating if the recorder is actively capturing and processing audio.
+    - worker_process (multiprocessing.Process): A separate process for handling audio data 
+                                                conversion to text.
+    - active (bool): A flag indicating if the recorder is actively capturing and processing 
+                     audio.
     - toggle_listener (bool): A flag for manually toggling the listening state on and off.
     - speaking (bool): A flag indicating if text-to-speech output is currently active.
     - archive_dir (str): The directory for storing archived audio files.
     - session_dir (str): A session-specific subdirectory for archiving audio files.
 
-    The class provides methods to start listening (`start_listening`), stop listening and cleanup resources (`cleanup`), and internal logic to support the background processing of audio data, including speech recognition and file archiving. It is designed to be used in applications that require real-time or near real-time speech-to-text conversion, such as voice-controlled applications, audio monitoring systems, or interactive voice response (IVR) systems.
+    The class provides methods to start listening (`start_listening`), stop listening and 
+    cleanup resources (`cleanup`), and internal logic to support the background processing 
+    of audio data, including speech recognition and file archiving. It is designed to be 
+    used in applications that require real-time or near real-time speech-to-text conversion, 
+    such as voice-controlled applications, audio monitoring systems, or interactive voice 
+    response (IVR) systems.
     """
     
     def __init__(self, language="en-US"):
         """
-        Initializes an instance of the AudioRecorder class, setting up necessary components for audio recording, processing, and speech-to-text conversion.
+        Initializes an instance of the AudioRecorder class, setting up necessary components 
+        for audio recording, processing, and speech-to-text conversion.
 
-        This constructor initializes the AudioRecorder class with configurations for speech recognition, including setting the language for recognition and preparing queues for audio data and processed text. It also starts a separate worker process for audio processing, leveraging the audio_processing_worker function to convert audio data to text in a non-blocking manner.
+        This constructor initializes the AudioRecorder class with configurations for speech 
+        recognition, including setting the language for recognition and preparing queues for 
+        audio data and processed text. It also starts a separate worker process for audio 
+        processing, leveraging the audio_processing_worker function to convert audio data to 
+        text in a non-blocking manner.
 
         Parameters:
-        - language (str, optional): The language code to be used for speech recognition. Defaults to 'en-US'.
+        - language (str, optional): The language code to be used for speech recognition. 
+                                    Defaults to 'en-US'.
 
         Attributes:
-        - recognizer (speech_recognition.Recognizer): An instance of the Recognizer class used for
-        speech recognition.
+        - recognizer (speech_recognition.Recognizer): An instance of the Recognizer class 
+                                                      used for speech recognition.
         - language (str): The language code for speech recognition.
         - audio_queue (queue.Queue): A queue for storing raw audio data to be processed.
-        - text_queue (queue.Queue): A queue for storing processed text results from speech recognition.
-        - word_buffer (list): A buffer to accumulate words from processed text before further processing.
-        - worker_process (multiprocessing.Process): A separate process dedicated to processing audio data
+        - text_queue (queue.Queue): A queue for storing processed text results from speech 
+                                    recognition.
+        - word_buffer (list): A buffer to accumulate words from processed text before further 
+                              processing.
+        - worker_process (multiprocessing.Process): A separate process dedicated to processing 
+                                                    audio data
         from audio_queue and posting recognized text to text_queue.
         - active (bool): A flag indicating if the AudioRecorder instance is active.
         - toggle_listener (bool): A flag used to control the start and stop of audio listening.
-        - speaking (bool): A flag indicating if text-to-speech output is currently speaking, to manage
-        overlapping audio processes.
+        - speaking (bool): A flag indicating if text-to-speech output is currently speaking, 
+                          to manage overlapping audio processes.
         - archive_dir (str): The base directory for archiving recorded audio.
-        - session_dir (str): A session-specific subdirectory within archive_dir for storing session data.
+        - session_dir (str): A session-specific subdirectory within archive_dir for storing 
+                             session data.
 
-        The constructor method sets up the environment for continuous audio processing and recognition,
-        including directory preparation for storing session data. The recognition language and worker
-        process configuration allow for flexible adaptation to different languages and concurrent audio
-        processing, ensuring that the main application thread remains unblocked.
+        The constructor method sets up the environment for continuous audio processing and 
+        recognition, including directory preparation for storing session data. The recognition 
+        language and worker process configuration allow for flexible adaptation to different 
+        languages and concurrent audio processing, ensuring that the main application thread 
+        remains unblocked.
         """
         self.recognizer = Recognizer()
         self.language = language
@@ -520,13 +591,26 @@ class AudioRecorder:
     
     def start_listening(self):
         """
-        Initiates the audio listening process, capturing audio input from the microphone in the background and processing the audio data for speech recognition.
+        Initiates the audio listening process, capturing audio input from the microphone in 
+        the background and processing the audio data for speech recognition.
 
-        This method sets up a continuous listening service that captures audio through the microphone and processes the audio data using a specified callback function. It calibrates the microphone to adjust for ambient noise, starts the background listening process, and initiates the worker process for audio processing. The method ensures that audio data is processed only when specific conditions are met, such as when listening has not been manually toggled off and when the system is not currently speaking (to avoid capturing generated speech as input).
+        This method sets up a continuous listening service that captures audio through the 
+        microphone and processes the audio data using a specified callback function. It 
+        calibrates the microphone to adjust for ambient noise, starts the background 
+        listening process, and initiates the worker process for audio processing. The method 
+        ensures that audio data is processed only when specific conditions are met, such as 
+        when listening has not been manually toggled off and when the system is not currently 
+        speaking (to avoid capturing generated speech as input).
 
-        The audio data captured during the listening session is put into an audio queue for processing by the worker process and is also archived by saving it to a file. This dual approach facilitates both real-time processing and the preservation of audio data for future analysis or review.
+        The audio data captured during the listening session is put into an audio queue for 
+        processing by the worker process and is also archived by saving it to a file. This 
+        dual approach facilitates both real-time processing and the preservation of audio 
+        data for future analysis or review.
 
-        Additionally, this method provides feedback to the user about the listening status, including calibration for ambient noise and the setting for phrase recognition time limit. It also informs the user about the interaction controls for triggering final inference and exiting the listening mode.
+        Additionally, this method provides feedback to the user about the listening status, 
+        including calibration for ambient noise and the setting for phrase recognition time 
+        limit. It also informs the user about the interaction controls for triggering final 
+        inference and exiting the listening mode.
         """
         
         self.microphone = Microphone()
@@ -553,11 +637,22 @@ class AudioRecorder:
 
     def cleanup(self):
         """
-        Stops the audio listening process and cleans up resources associated with the audio processing.
+        Stops the audio listening process and cleans up resources associated with the audio 
+        processing.
 
-        This method gracefully terminates the background audio listening and processing tasks. It first stops the background listener that captures audio from the microphone, ensuring that no further audio data is added to the processing queue. Then, it sends a termination signal (in this case, `None`) to the audio processing queue, which the worker process interprets as a command to stop processing and terminate. The method waits for the worker process to join, ensuring that it has completed its execution and resources are properly released. Finally, it sets the `active` flag of the AudioRecorder instance to `False`, indicating that the instance is no longer actively listening or processing audio.
+        This method gracefully terminates the background audio listening and processing tasks. 
+        It first stops the background listener that captures audio from the microphone, ensuring 
+        that no further audio data is added to the processing queue. Then, it sends a termination 
+        signal (in this case, `None`) to the audio processing queue, which the worker process 
+        interprets as a command to stop processing and terminate. The method waits for the worker 
+        process to join, ensuring that it has completed its execution and resources are properly 
+        released. Finally, it sets the `active` flag of the AudioRecorder instance to `False`, 
+        indicating that the instance is no longer actively listening or processing audio.
 
-        This cleanup method is essential for ensuring that the application can shut down without leaving orphaned processes or locked resources, making it critical for maintaining the stability and reliability of the application, especially in long-running or complex applications that may start and stop listening multiple times during their execution.
+        This cleanup method is essential for ensuring that the application can shut down without 
+        leaving orphaned processes or locked resources, making it critical for maintaining the 
+        stability and reliability of the application, especially in long-running or complex 
+        applications that may start and stop listening multiple times during their execution.
         """
         if self.stop_listening:
             self.stop_listening(wait_for_stop=True)
@@ -570,7 +665,12 @@ def summary_generator():
     """
     Generates a summary of the conversation from the messages stored in the chat history.
 
-    This function processes the messages stored in the chat history, extracting the user's input and the system's responses to generate a summary of the conversation. The summary includes the user's prompts, the system's responses, and any additional context or metadata that may be relevant for understanding the conversation flow. The function constructs the summary as a formatted text block, which can be displayed to the user or saved for future reference.
+    This function processes the messages stored in the chat history, extracting the user's 
+    input and the system's responses to generate a summary of the conversation. The summary 
+    includes the user's prompts, the system's responses, and any additional context or 
+    metadata that may be relevant for understanding the conversation flow. The function 
+    constructs the summary as a formatted text block, which can be displayed to the user 
+    or saved for future reference.
 
     Global Variables:
     - messages (list): The chat history containing messages from the user and the system.
@@ -629,12 +729,17 @@ def short_feedback():
     """
     Generates a short feedback response based on the user's input.
 
-    This function processes the user's input and generates a short feedback response using the GPT model. The feedback is intended to provide a quick, concise response to the user's prompt, offering a brief summary or acknowledgment of the input. The generated feedback is displayed to the user in the console and can be used to maintain a conversational flow or provide immediate responses to user queries.
+    This function processes the user's input and generates a short feedback response 
+    using the GPT model. The feedback is intended to provide a quick, concise response 
+    to the user's prompt, offering a brief summary or acknowledgment of the input. The 
+    generated feedback is displayed to the user in the console and can be used to 
+    maintain a conversational flow or provide immediate responses to user queries.
 
     Global Variables:
     - messages (list): The chat history containing messages from the user and the system.
 
-    No return value. The function directly interacts with the global variable `messages` to add the generated feedback response to the chat history.
+    No return value. The function directly interacts with the global variable `messages` 
+    to add the generated feedback response to the chat history.
     """
     global messages
     while True:
@@ -669,7 +774,9 @@ def clear_message_history():
     """
     Clears the message history stored in the chat system.
 
-    This function clears the message history stored in the global variable `messages`, effectively resetting the conversation to an empty state. It is useful for starting a new conversation or clearing the chat history to focus on a specific topic or task.
+    This function clears the message history stored in the global variable `messages`, 
+    effectively resetting the conversation to an empty state. It is useful for starting 
+    a new conversation or clearing the chat history to focus on a specific topic or task.
 
     Global Variables:
     - messages (list): The chat history containing messages from the user and the system.
@@ -715,17 +822,34 @@ def activate_text_input():
 
 def listen_for_flush_command():
     """
-    Monitors for a specific keyboard shortcut to toggle the state of the audio listener between active and paused for GPT inference processing.
+    Monitors for a specific keyboard shortcut to toggle the state of the audio 
+    listener between active and paused for GPT inference processing.
 
-    This function runs in a loop that continuously waits for the user to press a combination of keys. Upon detection, it either pauses the listener if it is currently active or resumes listening if it is paused. When pausing, the function also triggers a GPT inference on the text collected so far, provided the word buffer is not empty. After processing the collected text with GPT inference, the word buffer is cleared, and the system is ready to resume listening for more audio input.
+    This function runs in a loop that continuously waits for the user to press 
+    a combination of keys. Upon detection, it either pauses the listener if it 
+    is currently active or resumes listening if it is paused. When pausing, the 
+    function also triggers a GPT inference on the text collected so far, provided 
+    the word buffer is not empty. After processing the collected text with GPT 
+    inference, the word buffer is cleared, and the system is ready to resume 
+    listening for more audio input.
 
-    The pause state is useful for processing the accumulated audio data through GPT inference without receiving more input, which might be particularly beneficial in scenarios where real-time processing or batch processing of spoken input is desired. Resuming the listener allows the system to start capturing audio input again for subsequent processing.
+    The pause state is useful for processing the accumulated audio data through 
+    GPT inference without receiving more input, which might be particularly 
+    beneficial in scenarios where real-time processing or batch processing of 
+    spoken input is desired. Resuming the listener allows the system to start 
+    capturing audio input again for subsequent processing.
 
     Global Variables:
-    - audio_recorder: A global instance of the AudioRecorder class, which contains the current state
-                      of the listener, the word buffer for accumulating recognized text, and controls for toggling the listening state.
+    - audio_recorder: A global instance of the AudioRecorder class, which contains 
+                      the current state of the listener, the word buffer for 
+                      accumulating recognized text, and controls for toggling the 
+                      listening state.
 
-    This function directly interacts with the `audio_recorder` instance, using its `active`, `toggle_listener`, and `word_buffer` attributes to manage the flow of audio processing and GPT inference. It provides feedback to the user about the current state of the listener (paused or resumed) and handles the initiation of GPT inference based on the collected text.
+    This function directly interacts with the `audio_recorder` instance, using its 
+    `active`, `toggle_listener`, and `word_buffer` attributes to manage the flow of 
+    audio processing and GPT inference. It provides feedback to the user about the 
+    current state of the listener (paused or resumed) and handles the initiation of 
+    GPT inference based on the collected text.
     """
     global audio_recorder
     # Keep the thread alive while listening is active
@@ -758,21 +882,35 @@ def listen_for_flush_command():
 
 def manage_word_buffer(text_queue):
     """
-    Continuously retrieves recognized text from a queue and processes it for GPT inference, adding each piece of text to a global word buffer managed by the audio_recorder instance.
+    Continuously retrieves recognized text from a queue and processes it for GPT 
+    inference, adding each piece of text to a global word buffer managed by the 
+    audio_recorder instance.
 
-    This function runs in a loop that remains active for as long as the audio_recorder is set to active. It attempts to retrieve text from the provided text queue, with a timeout to ensure the loop can periodically check the state of `audio_recorder.active`. Upon successfully retrieving text, it calls `process_text` to handle the text: printing it, adding its words to the word buffer, and potentially triggering GPT inference if the buffer reaches a predefined size.
+    This function runs in a loop that remains active for as long as the audio_recorder
+    is set to active. It attempts to retrieve text from the provided text queue, with 
+    a timeout to ensure the loop can periodically check the state of 
+    `audio_recorder.active`. Upon successfully retrieving text, it calls `process_text` 
+    to handle the text: printing it, adding its words to the word buffer, and 
+    potentially triggering GPT inference if the buffer reaches a predefined size.
 
-    The function plays a crucial role in the asynchronous processing of speech-to-text results, facilitating real-time or near real-time processing of spoken input into actionable text data for GPT inference, and ensuring the system can dynamically respond to the volume of input by managing the accumulation of text in a buffer.
+    The function plays a crucial role in the asynchronous processing of speech-to-text 
+    results, facilitating real-time or near real-time processing of spoken input into 
+    actionable text data for GPT inference, and ensuring the system can dynamically 
+    respond to the volume of input by managing the accumulation of text in a buffer.
 
     Parameters:
-    - text_queue (queue.Queue): The queue from which recognized text is retrieved for processing.
+    - text_queue (queue.Queue): The queue from which recognized text is retrieved for 
+                                processing.
 
     Global Variables:
-    - audio_recorder: A global instance of the AudioRecorder class. This function relies on the
-                      `active` flag to maintain its loop and uses the `word_buffer` attribute as
-                      a destination for processed text.
+    - audio_recorder: A global instance of the AudioRecorder class. This function 
+                      relies on the `active` flag to maintain its loop and uses the 
+                      `word_buffer` attribute as a destination for processed text.
 
-    The function ensures that even in idle times, when no text is being added to the queue, it remains responsive to changes in the state of `audio_recorder.active` and can exit cleanly when audio processing is concluded or when the application is shutting down.
+    The function ensures that even in idle times, when no text is being added to the 
+    queue, it remains responsive to changes in the state of `audio_recorder.active` 
+    and can exit cleanly when audio processing is concluded or when the application 
+    is shutting down.
     """
     global audio_recorder
     # Keep the thread alive while listening is active
@@ -787,9 +925,16 @@ def manage_word_buffer(text_queue):
 
 def main():
     """
-    Initializes and starts a bidirectional chat application with speech recognition and GPT-powered responses.
+    Initializes and starts a bidirectional chat application with speech recognition 
+    and GPT-powered responses.
 
-    This function sets up the necessary components for a bidirectional chat application where the user's speech is recognized and converted to text, processed for GPT inference, and responses are generated and optionally converted to speech. It parses command-line arguments to configure the application, initializes global settings and resources, and manages the lifecycle of the application, including starting listening for audio input, managing the word buffer, and handling user commands.
+    This function sets up the necessary components for a bidirectional chat application 
+    where the user's speech is recognized and converted to text, processed for GPT 
+    inference, and responses are generated and optionally converted to speech. It 
+    parses command-line arguments to configure the application, initializes global 
+    settings and resources, and manages the lifecycle of the application, including 
+    starting listening for audio input, managing the word buffer, and handling user 
+    commands.
 
     The main function handles:
     - Configuration of language settings for speech recognition.
@@ -799,7 +944,11 @@ def main():
     - Enabling a verbose mode for debugging purposes.
     - Optionally listing available ElevenLabs voices and exiting.
 
-    It uses threads to handle different parts of the application concurrently, including listening for a command to flush the word buffer to GPT inference, managing the word buffer, and processing text from the speech recognition queue. The function ensures graceful shutdown and resource cleanup upon application exit or interruption.
+    It uses threads to handle different parts of the application concurrently, 
+    including listening for a command to flush the word buffer to GPT inference, 
+    managing the word buffer, and processing text from the speech recognition queue. 
+    The function ensures graceful shutdown and resource cleanup upon application 
+    exit or interruption.
 
     Command-line arguments:
     - `-l`, `--language`: Set the language code for speech recognition.
@@ -841,7 +990,7 @@ def main():
     
     parser.add_argument("-do", "--disable_voice_output", type=bool, help=f"Disable Elevenlabs output audio? (default: {disable_voice_output})", default=disable_voice_output)
     
-    parser.add_argument("-di", "--disable_voice_recognition", type=bool, help=f"EDisable Google voice regocnition? (default: {disable_voice_recognition})", default=disable_voice_recognition)
+    parser.add_argument("-di", "--disable_voice_recognition", type=bool, help=f"Disable Google voice recognition? (default: {disable_voice_recognition})", default=disable_voice_recognition)
     
     parser.add_argument("-sf", "--summary_file", type=bool, help=f"Import previous context for the discussion from the summary file (default: {summary_file})", default=summary_file)
     
