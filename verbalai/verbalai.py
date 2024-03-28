@@ -8,7 +8,6 @@ import argparse
 import keyboard
 import traceback
 from queue import Empty
-from typing import Iterator
 from threading import Thread
 from anthropic import Anthropic
 from .elevenlabsio import ElevenlabsIO
@@ -149,61 +148,6 @@ def freeze_cursor():
     # Disable cursor blinking
     sys.stdout.write('\033[?12l')
     sys.stdout.flush()
-
-
-def text_chunker(text: str) -> Iterator[str]:
-    """
-    Used during input streaming to chunk text blocks and set last char to space.
-    Use this function to simulate the default behavior of the official 11labs Library.
-    """
-    splitters = (".", ",", "?", "!", ";", ":", "—", "-", "(", ")", "[", "]", "}", " ")
-    buffer = ""
-    for i, char in enumerate(text):
-        buffer += char
-        if i < len(text) - 1:  # Check if this is not the last character
-            next_char = text[i + 1]
-            if buffer.endswith(splitters) and next_char == " ":
-                yield buffer if buffer.endswith(" ") else buffer + " "
-                buffer = ""
-    if buffer != "":
-        yield buffer + " "
-
-def collect_words_from_stream(text_stream_iterator, n_words = 10):
-    """ Collect words from the text stream iterator in chunks of n_words. """
-    buffer = ""
-    collected_words = []
-
-    # Accumulate the incoming chunk into the buffer
-    for chunk in text_stream_iterator:
-        buffer += chunk
-
-        # Process the buffer with text_chunker to extract words
-        temp_words = []  # Temporary list to hold words from the current buffer processing
-        for processed_chunk in text_chunker(buffer):
-            temp_words.extend(processed_chunk.strip().split())
-
-        # Check if the last word in temp_words might be incomplete
-        if temp_words and not buffer.endswith(tuple(". , ? ! ; : — - ( ) [ ] } ")):
-            # If the last word might be incomplete, 
-            # pop it from temp_words and append back to buffer for next iteration
-            incomplete_word = temp_words.pop()
-            buffer = incomplete_word
-        else:
-            buffer = ""
-        
-        # Extend the collected_words list with temp_words
-        collected_words.extend(temp_words)
-
-        # Check if we have collected at leastn_words words
-        while len(collected_words) >= n_words:
-            # Yield the first n_words words
-            yield collected_words[:n_words]
-            # Remove the yielded words from the collected list
-            collected_words = collected_words[n_words:]
-
-    # After the stream ends, if there are remaining words in collected_words, yield them
-    if collected_words:
-        yield collected_words
 
 
 def prompt(text, final=False):
@@ -864,9 +808,12 @@ def main():
     - `-m`, `--gpt_model`: Select the GPT model for response generation.
     - `-u`, `--username`: Set the username for the chat.
     - `-vb`, `--verbose`: Enable verbose mode.
-    - `-lv`, `--list_voices`: List available ElevenLabs voices and exit.
-
-    Note: The function assumes the presence of several global variables and external dependencies, including speech recognition, GPT inference, and text-to-speech services, as well as a correctly configured environment for audio capture and processing.
+    - `-tl`, `--time_limit`: Set the phrase time limit for Google speech recognition.
+    - `-ct`, `--calibration_time`: Set the calibration limit for Google speech recognition.
+    - `-of`, `--output_audio_format`: Set the ElevenLabs output audio format (mp3 or wav).
+    - `-do`, `--disable_voice_output`: Disable ElevenLabs output audio.
+    - `-di`, `--disable_voice_recognition`: Disable Google voice recognition.
+    - `-sf`, `--summary_file`: Import previous context for the discussion from the summary file.
     """
     global audio_recorder, feedback_word_buffer_limit, voice_id, gpt_model, username, verbose, available_models, elevenlabs_streamer, phrase_time_limit, calibration_time, elevenlabs_output_format, disable_voice_output, disable_voice_recognition, summary, summary_file
     
