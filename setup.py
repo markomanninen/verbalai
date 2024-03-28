@@ -13,10 +13,14 @@ setup(
         'keyboard',
         'python-dotenv',
         'SpeechRecognition',
-        'websockets',
-        'pyaudio',
-        'pydub',
+        'websockets'
     ],
+    extras_require={
+        'mp3': [
+            'pyaudio',
+            'pydub',
+        ]
+    },
     entry_points={
         'console_scripts': [
             'verbalai = verbalai.verbalai:main',

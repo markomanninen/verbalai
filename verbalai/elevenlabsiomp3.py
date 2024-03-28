@@ -1,17 +1,13 @@
 # elevenlabsio.py - A Python module for streaming text to speech using ElevenLabs API.
 from websockets.sync.client import connect
 from websockets.exceptions import ConnectionClosed
-from pyaudio import PyAudio, paInt16
 from base64 import b64decode
-from wave import open as open_wav
 from json import dumps, loads
 from os import environ
 from io import BytesIO
 import time
 import threading
 from queue import Queue, Empty
-# TODO: remove the following imports since they are not used in 
-# this implementation, but in the mp3 version
 from pydub import AudioSegment
 from pydub.playback import play
 
@@ -47,19 +43,15 @@ def text_chunker(chunks):
 
 # ElevenLabs API WebSocket streaming class
 class ElevenlabsIO:
-    def __init__(self, format=paInt16, channels=1, bit_rate=24000, output_format="wav", frames_per_buffer=3200, audio_buffer_in_seconds=2):
+    def __init__(self, bit_rate=44100, sample_rate=128, frames_per_buffer=3200, audio_buffer_in_seconds=2):
         """ Initialize the ElevenlabsIO instance. """
         # Audio format parameters for wav output format
-        self.format = format
-        self.channels = channels
+        # bit rate
         self.bit_rate = bit_rate
         self.frames_per_buffer = frames_per_buffer
-        self.stream = None
-        self.audio = PyAudio() if output_format == "wav" else None
+        self.sample_rate = sample_rate
         # Initial buffer size for audio data
-        # for instance, 4 second of audio is 128000 bytes <- paInt16 = 2 bytes * 1 channels * 16000 rate * 4 second
-        self.initial_buffer_size = 2 * self.channels * self.bit_rate * audio_buffer_in_seconds
-        self.output_format = output_format
+        self.initial_buffer_size = (self.bit_rate * 1000 / 8) * audio_buffer_in_seconds
         self.buffer = bytearray()
         # Start the playback thread
         self.audio_queue = Queue()
@@ -74,11 +66,8 @@ class ElevenlabsIO:
                 audio_chunk = self.audio_queue.get(block=True, timeout=1)
                 if audio_chunk:
                     self.buffer.extend(audio_chunk)
-                    if self.output_format == "wav":
-                        self.stream.write(audio_chunk)
-                    else:
-                        audio_segment = AudioSegment.from_file(BytesIO(audio_chunk), format="mp3")
-                        play(audio_segment)
+                    audio_segment = AudioSegment.from_file(BytesIO(audio_chunk), format="mp3")
+                    play(audio_segment)
             except Empty:
                 continue  # Loop will continue waiting for audio chunks
 
@@ -86,28 +75,11 @@ class ElevenlabsIO:
         """ Stream text chunks via WebSocket to ElevenLabs and play received audio in real-time. """
         global stream_uri, extra_headers
         
-        if (self.output_format == "mp3"):
-            # Default format is mp3 which requires no additional parameters
-            # TODO: Elevenlabs pro subscription has better quality options for mp3 however
-            # which are not supported in this implementation
-            output_format = ""
-        else:
-            # Wav format requires additional parameters for PCM (Pulse-code modulation) sample rate
-            output_format = f"&output_format=pcm_{self.bit_rate}"
+        output_format = f"&output_format=mp3_{self.bit_rate}_{self.sample_rate}"
         
         uri = stream_uri.format(voice_id=voice_id, model_id=model_id, output_format=output_format)
         
         with connect(uri, additional_headers=extra_headers) as ws:
-            
-            if self.output_format == "wav":
-                # Initialize PyAudio stream
-                self.stream = self.audio.open(
-                    format=self.format, 
-                    channels=self.channels, 
-                    rate=self.bit_rate, 
-                    output=True,
-                    frames_per_buffer=self.frames_per_buffer
-                )
             
             ws.send(dumps(
                 dict(
@@ -194,42 +166,16 @@ class ElevenlabsIO:
                 audio_buffer = b''
     
     def get_audio_bytes(self):
-        """ Get the buffered audio data as bytes. """
-
-        if self.output_format == "mp3":
-            self.buffer.seek(0)
-            # Return the MP3 content
-            return self.buffer
-
-        # Save the buffered PCM data as a WAV content
-        audio_content = BytesIO()
-        with open_wav(audio_content, 'wb') as wav:
-            wav.setnchannels(self.channels)
-            wav.setsampwidth(self.audio.get_sample_size(self.format))
-            wav.setframerate(self.bit_rate)
-            wav.writeframes(bytes(self.buffer))
-        # Ensure the buffer's pointer is at the beginning
-        audio_content.seek(0)
-        # Return the WAV content as bytes
-        return audio_content.getvalue()
+        """ Get the buffered mp3 audio data as bytes. """
+        self.buffer.seek(0)
+        return self.buffer
     
     def cleanup(self):
         """Cleanup the PyAudio stream more safely."""
         # Check if the stream object exists and is open before calling is_active
         self.playback_active = False
         self.playback_thread.join()
-        if self.stream:
-            try:
-                if self.stream.is_active() or self.stream.is_stopped():
-                    self.stream.stop_stream()
-                    self.stream.close()
-            except Exception as e:
-                print(f"Error during stream cleanup: {e}")
-            finally:
-                self.stream = None
     
     def quit(self):
         """ Cleanup and close the PyAudio instance. """
         self.cleanup()
-        if self.audio:
-            self.audio.terminate()

@@ -10,7 +10,7 @@ import traceback
 from queue import Empty
 from threading import Thread
 from anthropic import Anthropic
-from .elevenlabsio import ElevenlabsIO
+#from .elevenlabsio import ElevenlabsIO
 from multiprocessing import Process, Queue
 from colorama import init, Fore, Style, Back
 from speech_recognition import Recognizer, Microphone, AudioData, UnknownValueError, RequestError
@@ -69,6 +69,22 @@ elevenlabs_streamer = None
 
 # Output format for the generated audio files
 elevenlabs_output_format = "wav"  # mp3 or wav
+
+# Output bit rate for the generated audio files
+elevenlabs_output_bit_rate = 22050
+
+# Output sample rate for the generated audio files
+# Relevant only for the mp3 format
+elevenlabs_output_sample_rate = 128
+
+# Valid sample rates for WAV format
+valid_wav_sample_rates = [16000, 22050, 24000, 44100]
+
+# Valid combinations for MP3 format
+valid_mp3_combinations = {
+    22050: [32],
+    44100: [32, 64, 96, 128, 192]
+}
 
 # Initialize Elevenlabs voice output and Google Speech Recognition disablers
 disable_voice_output, disable_voice_recognition = False, False
@@ -923,6 +939,35 @@ def manage_word_buffer(text_queue):
             continue
 
 
+def import_elevenlabs_module(output_format):
+    """
+    Dynamically imports the appropriate ElevenlabsIO module based on the output format.
+    MP3 format requires ffmpeg to be installed. WAV format is supported by default 
+    Python modules. This is the reason why IO modules are separated.
+    """
+    if output_format == "wav":
+        from .elevenlabsio import ElevenlabsIO as SelectedElevenlabsIO
+    elif output_format == "mp3":
+        from .elevenlabsiomp3 import ElevenlabsIO as SelectedElevenlabsIO
+    else:
+        raise ValueError(f"Unsupported output format: {output_format}")
+    return SelectedElevenlabsIO
+
+
+def validate_wav_args(sample_rate):
+    """Validate WAV format arguments."""
+    if sample_rate not in valid_wav_sample_rates:
+        raise argparse.ArgumentTypeError(f"Invalid sample rate for WAV format. Valid options are: {valid_wav_sample_rates}")
+    return sample_rate
+
+def validate_mp3_args(bit_rate, sample_rate):
+    """Validate MP3 format arguments."""
+    valid_sample_rates = valid_mp3_combinations.get(bit_rate, [])
+    if sample_rate not in valid_sample_rates:
+        raise argparse.ArgumentTypeError(f"Invalid bit rate {bit_rate} kbps for MP3 with sample rate {sample_rate} Hz. Valid options are: {valid_mp3_combinations}")
+    return bit_rate, sample_rate
+
+
 def main():
     """
     Initializes and starts a bidirectional chat application with speech recognition 
@@ -964,7 +1009,7 @@ def main():
     - `-di`, `--disable_voice_recognition`: Disable Google voice recognition.
     - `-sf`, `--summary_file`: Import previous context for the discussion from the summary file.
     """
-    global audio_recorder, feedback_word_buffer_limit, voice_id, gpt_model, username, verbose, available_models, elevenlabs_streamer, phrase_time_limit, calibration_time, elevenlabs_output_format, disable_voice_output, disable_voice_recognition, summary, summary_file
+    global audio_recorder, feedback_word_buffer_limit, voice_id, gpt_model, username, verbose, available_models, elevenlabs_streamer, phrase_time_limit, calibration_time, elevenlabs_output_format, disable_voice_output, disable_voice_recognition, summary, summary_file, elevenlabs_output_sample_rate, elevenlabs_output_bit_rate
     
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Bidirectional Chat with Speech Recognition")
@@ -986,21 +1031,55 @@ def main():
     
     parser.add_argument("-ct", "--calibration_time", type=int, help=f"Calibration limit for Google speech recognition ambient background noise (default: {calibration_time})", default=calibration_time)
     
-    parser.add_argument("-of", "--output_audio_format", type=str, choices=["wav", "mp3"], help=f"Elevenlabs output audio format can be either mp3 or wav (default: {elevenlabs_output_format})", default=elevenlabs_output_format)
-    
     parser.add_argument("-do", "--disable_voice_output", type=bool, help=f"Disable Elevenlabs output audio? (default: {disable_voice_output})", default=disable_voice_output)
     
     parser.add_argument("-di", "--disable_voice_recognition", type=bool, help=f"Disable Google voice recognition? (default: {disable_voice_recognition})", default=disable_voice_recognition)
     
     parser.add_argument("-sf", "--summary_file", type=bool, help=f"Import previous context for the discussion from the summary file (default: {summary_file})", default=summary_file)
     
+    parser.add_argument("-of", "--output_audio_format", type=str, choices=["wav", "mp3"], help=f"Elevenlabs output audio format can be either mp3 or wav (default: {elevenlabs_output_format})", default=elevenlabs_output_format)
+    
+    parser.add_argument("-br", "--output_bit_rate", type=int, help=f"Set the output audio bitrate for Eleven Labs (default: {elevenlabs_output_bit_rate})", default=elevenlabs_output_bit_rate)
+    
+    parser.add_argument("-sr", "--output_sample_rate", type=int, help=f"Set the output audio samplerate for Eleven Labs MP3 stream (default: {elevenlabs_output_sample_rate})", default=elevenlabs_output_sample_rate)
+    
     args = parser.parse_args()
     
     # Set the output audio format for Eleven Labs
     elevenlabs_output_format = args.output_audio_format
     
-    # Initialize the Eleven Labs streamer, rate is not relevant for streaming mp3 audio
-    elevenlabs_streamer = ElevenlabsIO(rate=16000, output_format=elevenlabs_output_format)
+    try:
+        # Additional validation for MP3 format
+        if elevenlabs_output_format == "mp3":
+            # Ensure the bit rate is valid for the selected sample rate
+            validate_mp3_args(args.output_bit_rate, args.output_sample_rate)
+        else:
+            # Ensure the sample rate is valid for the WAV format
+            validate_wav_args(args.output_bit_rate)
+    except argparse.ArgumentTypeError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+    
+    # Set the output audio bitrate for Eleven Labs
+    # This is relevant for mp3 format only
+    elevenlabs_output_sample_rate = args.output_sample_rate
+    
+    # Set the output audio samplerate for Eleven Labs
+    elevenlabs_output_bit_rate = args.output_bit_rate
+    
+    # Import the correct ElevenlabsIO module based on the command line format argument
+    ElevenlabsIO = import_elevenlabs_module(elevenlabs_output_format)
+    
+    # Initialize the Eleven Labs streamer
+    if elevenlabs_output_format == "wav":
+        # For WAV format, only the bit rate is needed
+        kwargs = {"bit_rate": elevenlabs_output_bit_rate}
+    else:
+        # For MP3 format, both the sample rate and bit rate are needed
+        kwargs = {"sample_rate": elevenlabs_output_sample_rate, "bit_rate": elevenlabs_output_bit_rate}
+    
+    # Initialize the Eleven Labs streamer with the appropriate arguments
+    elevenlabs_streamer = ElevenlabsIO(**kwargs)
     
     # Set the word buffer limit
     feedback_word_buffer_limit = args.feedback_limit

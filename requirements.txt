@@ -4,5 +4,3 @@ keyboard
 python-dotenv
 SpeechRecognition
 websockets
-pyaudio
-pydub
