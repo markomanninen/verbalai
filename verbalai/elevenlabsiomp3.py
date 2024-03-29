@@ -1,4 +1,4 @@
-# elevenlabsio.py - A Python module for streaming text to speech using ElevenLabs API.
+# elevenlabsiomp3.py - A Python module for streaming text to speech using ElevenLabs API.
 from websockets.sync.client import connect
 from websockets.exceptions import ConnectionClosed
 from base64 import b64decode
@@ -6,7 +6,7 @@ from json import dumps, loads
 from os import environ
 from io import BytesIO
 import time
-import threading
+from threading import Thread
 from queue import Queue, Empty
 from pydub import AudioSegment
 from pydub.playback import play
@@ -43,33 +43,36 @@ def text_chunker(chunks):
 
 # ElevenLabs API WebSocket streaming class
 class ElevenlabsIO:
-    def __init__(self, bit_rate=44100, sample_rate=128, frames_per_buffer=3200, audio_buffer_in_seconds=2):
+    def __init__(self, bit_rate=44100, sample_rate=128, frames_per_buffer=3200, audio_buffer_in_seconds=1):
         """ Initialize the ElevenlabsIO instance. """
-        # Audio format parameters for wav output format
-        # bit rate
+        # Audio format parameters for mp3 output format
         self.bit_rate = bit_rate
         self.frames_per_buffer = frames_per_buffer
         self.sample_rate = sample_rate
         # Initial buffer size for audio data
-        self.initial_buffer_size = (self.bit_rate * 1000 / 8) * audio_buffer_in_seconds
+        self.initial_buffer_size = self.bit_rate * 10 * audio_buffer_in_seconds
         self.buffer = bytearray()
         # Start the playback thread
         self.audio_queue = Queue()
-        self.playback_thread = threading.Thread(target=self.playback_audio, daemon=True)
-        self.playback_active = True
+        self.playback_thread = Thread(target=self.playback_audio, daemon=True)
+        self.playback_active = False
         self.playback_thread.start()
     
     def playback_audio(self):
         """Continuously play audio chunks from the queue."""
-        while self.playback_active:
+        while True:
             try:
                 audio_chunk = self.audio_queue.get(block=True, timeout=1)
                 if audio_chunk:
+                    if audio_chunk == "END OF STREAM":
+                        break
+                    self.playback_active = True
                     self.buffer.extend(audio_chunk)
                     audio_segment = AudioSegment.from_file(BytesIO(audio_chunk), format="mp3")
                     play(audio_segment)
             except Empty:
-                continue  # Loop will continue waiting for audio chunks
+                continue
+        self.playback_active = False
 
     def process(self, voice_id, model_id, text_stream):
         """ Stream text chunks via WebSocket to ElevenLabs and play received audio in real-time. """
@@ -102,6 +105,7 @@ class ElevenlabsIO:
                     "text": chunk, 
                     "try_trigger_generation": True
                 }))
+                # Start receiving audio chunks already when the text is being sent
                 try:
                     data = loads(ws.recv(1e-4))
                     if "audio" in data and data["audio"]:
@@ -114,9 +118,14 @@ class ElevenlabsIO:
                                 self.audio_queue.put(audio_buffer)
                                 audio_buffer = b''  # Reset the buffer for subsequent chunks
                                 buffering = False  # Stop buffering, start real-time playback
+                                print("Buffering complete, starting real-time playback.")
                         else:
                             # Real-time playback mode, directly queue incoming chunks
                             self.audio_queue.put(audio_chunk)
+                        timediff = (time.time() - lasttime) if lasttime else 0
+                        totaltime += timediff
+                        lasttime = time.time()
+                        print(f"{round(timediff, 3)} Received audio chunk #1: {len(audio_chunk)} bytes {len(audio_buffer)}.")
                 except TimeoutError:
                     pass
 
@@ -125,9 +134,7 @@ class ElevenlabsIO:
 
             # Receive and play audio chunks as they arrive
             for message in ws:
-            #while True:
                 try:
-                    #response = loads(ws.recv())
                     response = loads(message)
                     if 'audio' in response and response['audio']:
                         # Decode the base64 audio chunk coming from Elevenlabs
@@ -146,36 +153,32 @@ class ElevenlabsIO:
                         timediff = (time.time() - lasttime) if lasttime else 0
                         totaltime += timediff
                         lasttime = time.time()
-                        print(f"{timediff} Received audio chunk: {len(audio_chunk)} bytes.")
+                        #print(f"{round(timediff, 3)} Received audio chunk #2: {len(audio_chunk)} bytes.")
                     elif response.get('isFinal', False):
                         # Elevenlab stream ended
                         # Handle any remaining audio in the buffer
                         if audio_buffer:
                             self.audio_queue.put(audio_buffer)
                             audio_buffer = b''
+                        self.audio_queue.put("END OF STREAM")
                     elif 'error' in response:
                         print(f"Elevenlabs websocket error: {response['message']}")
                     else:
                         print(f"Elevenlabs unknown response: {response}")
                 except ConnectionClosed as e:
                     print(f"Elevenlabs websocket error: {e}")
-            
-            # Handle the rest of the audio buffer that might be left
-            if audio_buffer:
-                self.audio_queue.put(audio_buffer)
-                audio_buffer = b''
     
     def get_audio_bytes(self):
         """ Get the buffered mp3 audio data as bytes. """
-        self.buffer.seek(0)
         return self.buffer
     
     def cleanup(self):
         """Cleanup the PyAudio stream more safely."""
-        # Check if the stream object exists and is open before calling is_active
-        self.playback_active = False
+        # Wait for the playback thread to finish
+        while self.playback_active:
+            time.sleep(0.1)
         self.playback_thread.join()
     
     def quit(self):
-        """ Cleanup and close the PyAudio instance. """
+        """ Cleanup playback thread. """
         self.cleanup()
