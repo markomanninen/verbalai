@@ -8,12 +8,8 @@ from json import dumps, loads
 from os import environ
 from io import BytesIO
 import time
-import threading
+from threading import Thread
 from queue import Queue, Empty
-# TODO: remove the following imports since they are not used in 
-# this implementation, but in the mp3 version
-from pydub import AudioSegment
-from pydub.playback import play
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -47,7 +43,7 @@ def text_chunker(chunks):
 
 # ElevenLabs API WebSocket streaming class
 class ElevenlabsIO:
-    def __init__(self, format=paInt16, channels=1, bit_rate=24000, output_format="wav", frames_per_buffer=3200, audio_buffer_in_seconds=2):
+    def __init__(self, format=paInt16, channels=1, bit_rate=22050, frames_per_buffer=3200, audio_buffer_in_seconds=1):
         """ Initialize the ElevenlabsIO instance. """
         # Audio format parameters for wav output format
         self.format = format
@@ -55,59 +51,54 @@ class ElevenlabsIO:
         self.bit_rate = bit_rate
         self.frames_per_buffer = frames_per_buffer
         self.stream = None
-        self.audio = PyAudio() if output_format == "wav" else None
+        self.audio = PyAudio()
         # Initial buffer size for audio data
         # for instance, 4 second of audio is 128000 bytes <- paInt16 = 2 bytes * 1 channels * 16000 rate * 4 second
         self.initial_buffer_size = 2 * self.channels * self.bit_rate * audio_buffer_in_seconds
-        self.output_format = output_format
         self.buffer = bytearray()
         # Start the playback thread
         self.audio_queue = Queue()
-        self.playback_thread = threading.Thread(target=self.playback_audio, daemon=True)
-        self.playback_active = True
+        self.playback_thread = Thread(target=self.playback_audio, daemon=True)
+        self.playback_active = False
         self.playback_thread.start()
     
     def playback_audio(self):
         """Continuously play audio chunks from the queue."""
-        while self.playback_active:
+        while True:
             try:
                 audio_chunk = self.audio_queue.get(block=True, timeout=1)
                 if audio_chunk:
+                    if audio_chunk == "END OF STREAM":
+                        break
+                    self.playback_active = True
                     self.buffer.extend(audio_chunk)
-                    if self.output_format == "wav":
-                        self.stream.write(audio_chunk)
-                    else:
-                        audio_segment = AudioSegment.from_file(BytesIO(audio_chunk), format="mp3")
-                        play(audio_segment)
+                    self.stream.write(audio_chunk)
+                else:
+                    print("Empty audio chunk received. Exit the loop")
+                    break
             except Empty:
-                continue  # Loop will continue waiting for audio chunks
+                continue
+        self.playback_active = False
 
     def process(self, voice_id, model_id, text_stream):
         """ Stream text chunks via WebSocket to ElevenLabs and play received audio in real-time. """
         global stream_uri, extra_headers
         
-        if (self.output_format == "mp3"):
-            # Default format is mp3 which requires no additional parameters
-            # TODO: Elevenlabs pro subscription has better quality options for mp3 however
-            # which are not supported in this implementation
-            output_format = ""
-        else:
-            # Wav format requires additional parameters for PCM (Pulse-code modulation) sample rate
-            output_format = f"&output_format=pcm_{self.bit_rate}"
+        # Wav format requires additional parameters for PCM (Pulse-code modulation) sample rate
+        output_format = f"&output_format=pcm_{self.bit_rate}"
         
         uri = stream_uri.format(voice_id=voice_id, model_id=model_id, output_format=output_format)
         
         with connect(uri, additional_headers=extra_headers) as ws:
             
-            if self.output_format == "wav":
-                # Initialize PyAudio stream
-                self.stream = self.audio.open(
-                    format=self.format, 
-                    channels=self.channels, 
-                    rate=self.bit_rate, 
-                    output=True,
-                    frames_per_buffer=self.frames_per_buffer
-                )
+            # Initialize PyAudio stream
+            self.stream = self.audio.open(
+                format=self.format, 
+                channels=self.channels, 
+                rate=self.bit_rate, 
+                output=True,
+                frames_per_buffer=self.frames_per_buffer
+            )
             
             ws.send(dumps(
                 dict(
@@ -130,6 +121,7 @@ class ElevenlabsIO:
                     "text": chunk, 
                     "try_trigger_generation": True
                 }))
+                # Start receiving audio chunks already when the text is being sent
                 try:
                     data = loads(ws.recv(1e-4))
                     if "audio" in data and data["audio"]:
@@ -145,6 +137,10 @@ class ElevenlabsIO:
                         else:
                             # Real-time playback mode, directly queue incoming chunks
                             self.audio_queue.put(audio_chunk)
+                        timediff = (time.time() - lasttime) if lasttime else 0
+                        totaltime += timediff
+                        lasttime = time.time()
+                        #print(f"{round(timediff, 3)} Received audio chunk #1: {len(audio_chunk)} bytes.")
                 except TimeoutError:
                     pass
 
@@ -153,9 +149,7 @@ class ElevenlabsIO:
 
             # Receive and play audio chunks as they arrive
             for message in ws:
-            #while True:
                 try:
-                    #response = loads(ws.recv())
                     response = loads(message)
                     if 'audio' in response and response['audio']:
                         # Decode the base64 audio chunk coming from Elevenlabs
@@ -174,33 +168,23 @@ class ElevenlabsIO:
                         timediff = (time.time() - lasttime) if lasttime else 0
                         totaltime += timediff
                         lasttime = time.time()
-                        print(f"{timediff} Received audio chunk: {len(audio_chunk)} bytes.")
+                        #print(f"{round(timediff, 3)} Received audio chunk #2: {len(audio_chunk)} bytes.")
                     elif response.get('isFinal', False):
                         # Elevenlab stream ended
                         # Handle any remaining audio in the buffer
                         if audio_buffer:
                             self.audio_queue.put(audio_buffer)
                             audio_buffer = b''
+                        self.audio_queue.put("END OF STREAM")
                     elif 'error' in response:
                         print(f"Elevenlabs websocket error: {response['message']}")
                     else:
                         print(f"Elevenlabs unknown response: {response}")
                 except ConnectionClosed as e:
                     print(f"Elevenlabs websocket error: {e}")
-            
-            # Handle the rest of the audio buffer that might be left
-            if audio_buffer:
-                self.audio_queue.put(audio_buffer)
-                audio_buffer = b''
     
     def get_audio_bytes(self):
         """ Get the buffered audio data as bytes. """
-
-        if self.output_format == "mp3":
-            self.buffer.seek(0)
-            # Return the MP3 content
-            return self.buffer
-
         # Save the buffered PCM data as a WAV content
         audio_content = BytesIO()
         with open_wav(audio_content, 'wb') as wav:
@@ -215,8 +199,9 @@ class ElevenlabsIO:
     
     def cleanup(self):
         """Cleanup the PyAudio stream more safely."""
-        # Check if the stream object exists and is open before calling is_active
-        self.playback_active = False
+        # Wait for the playback thread to finish
+        while self.playback_active:
+            time.sleep(0.1)
         self.playback_thread.join()
         if self.stream:
             try:
