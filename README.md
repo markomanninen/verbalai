@@ -2,7 +2,17 @@
 
 VerbalAI is a near to real-time bidirectional voice AI chatbot implemented as a command-line tool. It utilizes voice-to-text recognition, GPT language model, and text-to-speech service to enable interactive conversations with an AI assistant.
 
-![verbalai.png](verbalai.png)
+```
+
+██╗   ██╗███████╗██████╗ ██████╗  █████╗ ██╗      █████╗ ██╗
+██║   ██║██╔════╝██╔══██╗██╔══██╗██╔══██╗██║     ██╔══██╗██║
+██║   ██║█████╗  ██████╔╝██████╔╝███████║██║     ███████║██║
+╚██╗ ██╔╝██╔══╝  ██╔══██╗██╔══██╗██╔══██║██║     ██╔══██║██║
+ ╚████╔╝ ███████╗██║  ██║██████╔╝██║  ██║███████╗██║  ██║██║
+  ╚═══╝  ╚══════╝╚═╝  ╚═╝╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═╝
+                                                            
+         Bidirectional Voice AI Chatbot - VerbalAI          
+```
 
 ## Features
 
