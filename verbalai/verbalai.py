@@ -75,7 +75,7 @@ elevenlabs_output_bit_rate = 22050
 
 # Output sample rate for the generated audio files
 # Relevant only for the mp3 format
-elevenlabs_output_sample_rate = 128
+elevenlabs_output_sample_rate = 32
 
 # Valid sample rates for WAV format
 valid_wav_sample_rates = [16000, 22050, 24000, 44100]
