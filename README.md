@@ -40,10 +40,11 @@ VerbalAI is a near to real-time bidirectional voice AI chatbot implemented as a 
    ```
    pip install -r requirements.txt
    ```
-   Optional MP3 output support requires `ffmpeg` libraries installed as well as `PyAudio` and `PyDub`. You may install them with:
+   Optional MP3 output support requires `ffmpeg` libraries installed as well as `PyAudio` and `PyDub`. You may install Python modules with:
    ```
    pip install -r requirements_mp3.txt
    ```
+   but `ffmpeg` requires installing its own libraries: https://ffmpeg.org/
 
 4. Set up the environment variables:
    - Create a `.env` file in the project root directory or copy `.env.example` to `.env`.
