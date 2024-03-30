@@ -153,6 +153,9 @@ Generate a summary of the conversation given below:
 <<summary>>
 """
 
+###################################################
+# CONSOLE MAGIC
+###################################################
 
 def blink_cursor():
     # Enable cursor blinking right after feedback
@@ -165,6 +168,15 @@ def freeze_cursor():
     sys.stdout.write('\033[?12l')
     sys.stdout.flush()
 
+
+def invert_text(text):
+    """ Inverts the text color and background color for a given text string. """
+    return Back.RED + Style.BRIGHT + Fore.BLACK + text + Style.RESET_ALL
+
+
+###################################################
+# LANGUAGE INFERENCE
+###################################################
 
 def prompt(text, final=False):
     """
@@ -300,52 +312,6 @@ def prompt(text, final=False):
         return response
 
 
-def save_audio_to_file(audio_data, prefix="output", extension="mp3"):
-    """
-    Saves the provided audio data to a file within a session-specific directory, uniquely 
-    naming the file based on a prefix, a sequential number, and a specified file extension.
-    
-    This function examines the existing files within the session directory that match the 
-    provided prefix and extension. It then determines the next available sequential number 
-    to use in the filename to ensure uniqueness. The audio data is written to this newly 
-    named file in binary mode.
-
-    Parameters:
-    - audio_data (bytes): The binary audio data to be saved.
-    - prefix (str, optional): The prefix to be used for the filename. Defaults to "output".
-    - extension (str, optional): The file extension (type) for the audio file. Defaults 
-                                 to "mp3".
-
-    Global Variables:
-    - audio_recorder: A global object that contains information about the current audio 
-                      session, including the directory where audio files are stored 
-                      (`session_dir`).
-
-    The function constructs the filename as follows: "{prefix}-{n}.{extension}", where 
-    {n} is the next available sequential number. This file is then saved to the session 
-    directory specified by `audio_recorder.session_dir`.
-
-    No return value. The function directly writes the file to the disk.
-    """
-    global audio_recorder
-    # List all files in the session directory
-    files = os.listdir(audio_recorder.session_dir)
-    
-    # Filter files that start with the prefix and end with '.wav', and extract their numbers
-    prefix_pattern = f"{prefix}-(\\d+)\\.{extension}"
-    numbers = [int(re.search(prefix_pattern, file).group(1)) for file in files if re.match(prefix_pattern, file)]
-    
-    # Find the next number to use (start at 1 if no files found)
-    next_nro = max(numbers) + 1 if numbers else 1
-    
-    filename = f"{prefix}-{next_nro}.{extension}"
-    file_path = os.path.join(audio_recorder.session_dir, filename)
-    
-    # Save the audio data to the file
-    with open(file_path, "wb") as file:
-        file.write(audio_data)
-
-
 def gpt_inference(text, final=False):
     """
     Conducts GPT inference on the provided text prompt and logs the prompt, response, 
@@ -442,6 +408,56 @@ def process_text(text, word_buffer):
         word_buffer.clear()
 
 
+def save_audio_to_file(audio_data, prefix="output", extension="mp3"):
+    """
+    Saves the provided audio data to a file within a session-specific directory, uniquely 
+    naming the file based on a prefix, a sequential number, and a specified file extension.
+    
+    This function examines the existing files within the session directory that match the 
+    provided prefix and extension. It then determines the next available sequential number 
+    to use in the filename to ensure uniqueness. The audio data is written to this newly 
+    named file in binary mode.
+
+    Parameters:
+    - audio_data (bytes): The binary audio data to be saved.
+    - prefix (str, optional): The prefix to be used for the filename. Defaults to "output".
+    - extension (str, optional): The file extension (type) for the audio file. Defaults 
+                                 to "mp3".
+
+    Global Variables:
+    - audio_recorder: A global object that contains information about the current audio 
+                      session, including the directory where audio files are stored 
+                      (`session_dir`).
+
+    The function constructs the filename as follows: "{prefix}-{n}.{extension}", where 
+    {n} is the next available sequential number. This file is then saved to the session 
+    directory specified by `audio_recorder.session_dir`.
+
+    No return value. The function directly writes the file to the disk.
+    """
+    global audio_recorder
+    # List all files in the session directory
+    files = os.listdir(audio_recorder.session_dir)
+    
+    # Filter files that start with the prefix and end with '.wav', and extract their numbers
+    prefix_pattern = f"{prefix}-(\\d+)\\.{extension}"
+    numbers = [int(re.search(prefix_pattern, file).group(1)) for file in files if re.match(prefix_pattern, file)]
+    
+    # Find the next number to use (start at 1 if no files found)
+    next_nro = max(numbers) + 1 if numbers else 1
+    
+    filename = f"{prefix}-{next_nro}.{extension}"
+    file_path = os.path.join(audio_recorder.session_dir, filename)
+    
+    # Save the audio data to the file
+    with open(file_path, "wb") as file:
+        file.write(audio_data)
+
+
+###################################################
+# SPEECH-TO-TEXT PROCESSING
+###################################################
+
 def audio_processing_worker(input_queue, language, text_queue):
     """
     Processes audio data from an input queue using speech recognition and posts 
@@ -503,12 +519,6 @@ def audio_processing_worker(input_queue, language, text_queue):
             print(f"Could not request results from Google Speech Recognition service; {e}")
         except Exception as e:
             print(f"Error processing audio; {e}")
-
-
-def invert_text(text):
-    """ Inverts the text color and background color for a given text string. """
-    return Back.RED + Style.BRIGHT + Fore.BLACK + text + Style.RESET_ALL
-
 
 class AudioRecorder:
     """
@@ -676,6 +686,11 @@ class AudioRecorder:
         if self.worker_process.is_alive():
             self.worker_process.join()
         self.active = False
+
+
+###################################################
+# THREADED WORKERS FOR SHORTCUT COMMANDS
+###################################################
 
 def summary_generator():
     """
@@ -938,6 +953,10 @@ def manage_word_buffer(text_queue):
         except Empty:
             continue
 
+
+###################################################
+# HELPERS FOR MAIN FUNCTION
+###################################################
 
 def import_elevenlabs_module(output_format):
     """
