@@ -89,6 +89,7 @@ Some notable options include:
 - `-v, --voice_id`: Set the Elevenlabs voice ID (default: 29vD33N1CtxCmqQRPOHJ / Drew)
 - `-m, --gpt_model`: Set the Anthropic Claude GPT language model (default: claude-3-haiku-20240307)
 - `-u, --username`: Set the chat username (default: VerbalHuman)
+- `-fs, --file_source`: Instead of microphone input, give a file or URL for inference (default: )
 
 For more information on the available options, refer to the `verbalai --help` command.
 
