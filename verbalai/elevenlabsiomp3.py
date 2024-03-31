@@ -177,7 +177,7 @@ class ElevenlabsIO:
         # Wait for the playback thread to finish
         while self.playback_active:
             time.sleep(0.1)
-        self.playback_thread.join()
+        self.playback_thread.join(timeout=1)
     
     def quit(self):
         """ Cleanup playback thread. """
