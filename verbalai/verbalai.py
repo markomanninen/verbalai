@@ -1,19 +1,42 @@
 # verbalai.py - A Python script for near real-time voice-to-text, text to prompt text and text-to-speech interaction with an AI chatbot.
 import os
 import re
+import io
 import sys
 import time
 import json
+import wave
 import argparse
 import keyboard
 import traceback
+import subprocess
+import urllib.request
 from queue import Empty
 from threading import Thread
 from anthropic import Anthropic
-#from .elevenlabsio import ElevenlabsIO
 from multiprocessing import Process, Queue
 from colorama import init, Fore, Style, Back
 from speech_recognition import Recognizer, Microphone, AudioData, UnknownValueError, RequestError
+
+
+# Check if ffmpeg is installed
+def is_ffmpeg_installed():
+    try:
+        subprocess.run(["ffmpeg", "-version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except OSError:
+        return False
+
+
+# Additional imports for file and URL processing
+try:
+    from pydub import AudioSegment
+    if not is_ffmpeg_installed():
+        raise ImportError("ffmpeg is required for MP3 processing but not found. Download from: https://ffmpeg.org/")
+except ImportError as e:
+    AudioSegment = None
+    ffmpeg_error = str(e)
+
 
 # Load environment variables from a .env file
 from dotenv import load_dotenv
@@ -115,6 +138,10 @@ hotkey_exit      = "ctrl+c"     # Exit the chatbot
 
 # Summary and previous context summary file
 summary, summary_file = "", ""
+
+# Audio file source for voice recognition
+# Either local file or url (wav / mp3)
+audio_file_source = ""
 
 # System message part for the GPT model
 short_mode = "You are currently in the short response mode. Respond to the user's input with a short one full complete sentence."
@@ -506,10 +533,13 @@ def audio_processing_worker(input_queue, language, text_queue):
 
         if audio_data is None:
             break
+        
+        # Check if audio_data is a tuple and convert it to AudioData if necessary
+        if isinstance(audio_data, tuple):
+            audio_data = AudioData(audio_data[0], audio_data[1], audio_data[2])
         # Process the audio data with the Google Speech Recognition API
-        audio = AudioData(audio_data[0], audio_data[1], audio_data[2])
         try:
-            text = recognizer.recognize_google(audio, language=language)
+            text = recognizer.recognize_google(audio_data, language=language)
             if text:
                 text_queue.put(text)
         except UnknownValueError:
@@ -519,6 +549,7 @@ def audio_processing_worker(input_queue, language, text_queue):
             print(f"Could not request results from Google Speech Recognition service; {e}")
         except Exception as e:
             print(f"Error processing audio; {e}")
+
 
 class AudioRecorder:
     """
@@ -615,6 +646,121 @@ class AudioRecorder:
         self.session_dir = os.path.join(self.archive_dir, time.strftime("%Y%m%d-%H%M%S"))
         os.makedirs(self.session_dir, exist_ok=True)
     
+    def file_source(self, source):
+        """ Processes audio data from a file or URL for speech recognition. """
+        self.worker_process.start()
+        if source.startswith(('http://', 'https://')):
+            self.process_from_url(source)
+        else:
+            self.process_from_file(source)
+        self.audio_queue.put('TERMINATE')
+
+    def process_from_file(self, file_path, file_in_chunks=True):
+        """ Processes audio data from a file for speech recognition. """
+        extension = os.path.splitext(file_path)[1].lower()
+        if extension == '.wav':
+            if file_in_chunks:
+                self.process_wav_file_in_chunks(file_path)
+            else:
+                self.process_wav_file(file_path)
+        elif extension == '.mp3':
+            if not AudioSegment:
+                raise ImportError("PyDub is required for MP3 processing but not installed.")
+            if not is_ffmpeg_installed():
+                raise ImportError("ffmpeg is required for MP3 processing but not found.")
+            if file_in_chunks:
+                self.process_mp3_file_in_chunks(file_path)
+            else:
+                self.process_mp3_file(file_path)
+        else:
+            raise ValueError("Unsupported file format.")
+
+    def process_from_url(self, url):
+        """ Processes audio data from a URL for speech recognition. """
+        response = urllib.request.urlopen(url)
+        data = response.read()
+        content_type = response.headers.get('Content-Type')
+        stream = io.BytesIO(data)
+        if 'audio/wav' in content_type:
+            self.process_wav_stream(stream)
+        elif 'audio/mpeg' in content_type:
+            if not AudioSegment:
+                raise ImportError("pydub is required for MP3 processing but not installed.")
+            if not is_ffmpeg_installed():
+                raise ImportError("ffmpeg is required for MP3 processing but not found.")
+            self.process_mp3_stream(stream)
+        else:
+            raise ValueError("Unsupported audio format from URL.")
+
+    def process_wav_file_in_chunks(self, file_path, chunk_size=102400):
+        """ Processes a WAV audio file in chunks for speech recognition. """
+        with wave.open(file_path, 'rb') as wav_file:
+            framerate = wav_file.getframerate()
+            sampwidth = wav_file.getsampwidth()
+            nchannels = wav_file.getnchannels()
+            
+            while True:
+                frames = wav_file.readframes(chunk_size)
+                if not frames:
+                    break  # End of file reached
+                
+                # Convert frames to AudioData and enqueue for processing
+                audio_data = AudioData(frames, framerate, sampwidth)
+                self.audio_queue.put(audio_data)
+
+    def process_wav_file(self, file_path):
+        """ Processes a WAV audio file for speech recognition. """
+        with open(file_path, 'rb') as f:
+            self.process_wav_stream(f)
+    
+    def process_mp3_file_in_chunks(self, file_path, chunk_length=4096):
+        """ Processes an MP3 audio file in chunks for speech recognition. """
+        # Open the audio file using pydub
+        audio_file = AudioSegment.from_file(file_path, format="mp3")
+        
+        # Calculate the total number of chunks
+        total_chunks = len(audio_file) // chunk_length
+        
+        # Process each chunk individually
+        for i in range(total_chunks + 1):
+            start_ms = i * chunk_length
+            end_ms = start_ms + chunk_length
+            chunk = audio_file[start_ms:end_ms]
+            
+            # Ensure the chunk is mono and has the desired frame rate
+            chunk = chunk.set_frame_rate(16000).set_channels(1)
+            
+            # Convert chunk to the format expected by the audio queue
+            frames = chunk.get_array_of_samples()
+            audio_data = AudioData(frames.tobytes(), chunk.frame_rate, chunk.sample_width)
+            
+            # Put the chunked audio data into the queue for processing
+            self.audio_queue.put(audio_data)
+
+    def process_mp3_file(self, file_path):
+        """ Processes an MP3 audio file for speech recognition. """
+        audio = AudioSegment.from_mp3(file_path)
+        self.process_audio_segment(audio)
+
+    def process_wav_stream(self, stream):
+        """ Processes a WAV audio stream for speech recognition. """
+        with wave.open(stream, 'rb') as wav_file:
+            frames = wav_file.readframes(wav_file.getnframes())
+            audio_data = AudioData(frames, wav_file.getframerate(), wav_file.getsampwidth())
+            self.audio_queue.put(audio_data)
+
+    def process_mp3_stream(self, stream):
+        """ Processes an MP3 audio stream for speech recognition. """
+        audio = AudioSegment.from_file(stream, format="mp3")
+        self.process_audio_segment(audio)
+
+    def process_audio_segment(self, audio_segment):
+        """ Processes an audio segment for speech recognition. """
+        audio_segment = audio_segment.set_frame_rate(16000).set_channels(1)
+        frames = audio_segment.get_array_of_samples()
+        audio_data = AudioData(frames.tobytes(), audio_segment.frame_rate, audio_segment.sample_width)
+        self.audio_queue.put(audio_data)
+    
     def start_listening(self):
         """
         Initiates the audio listening process, capturing audio input from the microphone in 
@@ -684,7 +830,7 @@ class AudioRecorder:
             self.stop_listening(wait_for_stop=True)
         self.audio_queue.put(None)
         if self.worker_process.is_alive():
-            self.worker_process.join()
+            self.worker_process.join(timeout=1)
         self.active = False
 
 
@@ -968,6 +1114,8 @@ def import_elevenlabs_module(output_format):
         from .elevenlabsio import ElevenlabsIO as SelectedElevenlabsIO
     elif output_format == "mp3":
         from .elevenlabsiomp3 import ElevenlabsIO as SelectedElevenlabsIO
+        if not is_ffmpeg_installed():
+            raise ImportError("ffmpeg is required for MP3 processing but not found. Download from: https://ffmpeg.org/")
     else:
         raise ValueError(f"Unsupported output format: {output_format}")
     return SelectedElevenlabsIO
@@ -978,6 +1126,7 @@ def validate_wav_args(sample_rate):
     if sample_rate not in valid_wav_sample_rates:
         raise argparse.ArgumentTypeError(f"Invalid sample rate for WAV format. Valid options are: {valid_wav_sample_rates}")
     return sample_rate
+
 
 def validate_mp3_args(bit_rate, sample_rate):
     """Validate MP3 format arguments."""
@@ -1028,7 +1177,7 @@ def main():
     - `-di`, `--disable_voice_recognition`: Disable Google voice recognition.
     - `-sf`, `--summary_file`: Import previous context for the discussion from the summary file.
     """
-    global audio_recorder, feedback_word_buffer_limit, voice_id, gpt_model, username, verbose, available_models, elevenlabs_streamer, phrase_time_limit, calibration_time, elevenlabs_output_format, disable_voice_output, disable_voice_recognition, summary, summary_file, elevenlabs_output_sample_rate, elevenlabs_output_bit_rate
+    global audio_recorder, feedback_word_buffer_limit, voice_id, gpt_model, username, verbose, available_models, elevenlabs_streamer, phrase_time_limit, calibration_time, elevenlabs_output_format, disable_voice_output, disable_voice_recognition, summary, summary_file, elevenlabs_output_sample_rate, elevenlabs_output_bit_rate, audio_file_source
     
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Bidirectional Chat with Speech Recognition")
@@ -1061,6 +1210,8 @@ def main():
     parser.add_argument("-br", "--output_bit_rate", type=int, help=f"Set the output audio bitrate for Eleven Labs (default: {elevenlabs_output_bit_rate})", default=elevenlabs_output_bit_rate)
     
     parser.add_argument("-sr", "--output_sample_rate", type=int, help=f"Set the output audio samplerate for Eleven Labs MP3 stream (default: {elevenlabs_output_sample_rate})", default=elevenlabs_output_sample_rate)
+    
+    parser.add_argument("-fs", "--file_source", type=str, help=f" (default: {audio_file_source})", default=audio_file_source)
     
     args = parser.parse_args()
     
@@ -1136,15 +1287,47 @@ def main():
         else:
             print(f"Summary file ({summary_file}) does not exist.")
     
+    audio_file_source = args.file_source
+    
     # Initialize the AudioRecorder class
     audio_recorder = AudioRecorder(language=args.language)
+    
+    # Start the flush command listener thread
+    flush_thread = Thread(target=listen_for_flush_command, daemon=True)
+    flush_thread.start()
+    
+    # Create a thread targeting the activate_text_input function
+    input_thread = Thread(target=activate_text_input, daemon=True)
+    input_thread.start()
+    
+    # Create a thread targeting the activate_text_input function
+    summary_thread = Thread(target=summary_generator, daemon=True)
+    summary_thread.start()
+    
+    # Clear message history
+    clear_history_thread = Thread(target=clear_message_history, daemon=True)
+    clear_history_thread.start()
+    
+    # Clear message history
+    short_feedback_thread = Thread(target=short_feedback, daemon=True)
+    short_feedback_thread.start()
+    
+    # Start the word buffer manager thread
+    buffer_manager_thread = Thread(
+        target=manage_word_buffer, 
+        args=(audio_recorder.text_queue,), 
+        daemon=True
+    )
+    buffer_manager_thread.start()
     
     # ANSI escape codes for screen clear and cursor home
     print(chr(27) + "[2J" + chr(27) + "[;H")
     print(ascii_art)
     print("############################################################")
     
-    if not disable_voice_recognition:
+    if audio_file_source:
+        audio_recorder.file_source(audio_file_source)
+    elif not disable_voice_recognition:
         audio_recorder.start_listening()
     
     # Print the hotkeys for user interaction
@@ -1152,36 +1335,6 @@ def main():
     print("############################################################\n")
 
     blink_cursor()
-    
-    # Start the flush command listener thread
-    flush_thread = Thread(target=listen_for_flush_command)
-    flush_thread.daemon = True
-    flush_thread.start()
-    
-    # Create a thread targeting the activate_text_input function
-    input_thread = Thread(target=activate_text_input)
-    input_thread.daemon = True
-    input_thread.start()
-    
-    # Create a thread targeting the activate_text_input function
-    summary_thread = Thread(target=summary_generator)
-    summary_thread.daemon = True
-    summary_thread.start()
-    
-    # Clear message history
-    clear_history_thread = Thread(target=clear_message_history)
-    clear_history_thread.daemon = True
-    clear_history_thread.start()
-    
-    # Clear message history
-    short_feedback_thread = Thread(target=short_feedback)
-    short_feedback_thread.daemon = True
-    short_feedback_thread.start()
-
-    # Start the word buffer manager thread
-    buffer_manager_thread = Thread(target=manage_word_buffer, args=(audio_recorder.text_queue,))
-    buffer_manager_thread.daemon = True
-    buffer_manager_thread.start()
 
     try:
         # Keep the main thread alive
