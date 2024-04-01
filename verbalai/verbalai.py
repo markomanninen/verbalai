@@ -37,7 +37,7 @@ from .prompts import (
 )
 
 # Import log lonfig as a side effect only
-from verbalai import log_config
+from .log_config import setup_logging
 import logging
 logger = logging.getLogger(__name__)
 
@@ -84,8 +84,8 @@ init(autoreset=True)
 # Global variables
 default_input_voice_recognition_language = "en-US"
 feedback_word_buffer_limit = 25
-feedback_token_limit = 25
-response_token_limit = 250
+feedback_token_limit = 20
+response_token_limit = 150
 phrase_time_limit = 10
 calibration_time = 2
 
@@ -1288,6 +1288,16 @@ def main():
     
     # Verbose print debug
     verbose = args.verbose
+    
+    # Determine the logging level based on the verbose argument
+    if verbose:
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.INFO
+    
+    # Only set up logging if no handlers are configured yet
+    if not logging.getLogger().hasHandlers():
+        setup_logging(log_level)
     
     # Disable Elevenlabs voice output
     disable_voice_output = args.disable_voice_output
