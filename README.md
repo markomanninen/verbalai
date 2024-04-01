@@ -26,6 +26,12 @@ VerbalAI is a near to real-time bidirectional voice AI chatbot implemented as a 
 
 ## Installation
 
+Make sure you have the latest setuptools installed:
+
+```
+pip install --upgrade pip setuptools wheel
+```
+
 1. Clone the repository:
    ```
    git clone https://github.com/markomanninen/verbalai.git
@@ -63,6 +69,7 @@ VerbalAI is a near to real-time bidirectional voice AI chatbot implemented as a 
    ```
    pip install .[mp3]
    ```
+
 
 ## Usage
 
@@ -117,5 +124,6 @@ Contributions are welcome! If you find any issues or have suggestions for improv
 - https://github.com/KoljaB/AIVoiceChat
 - https://github.com/lspahija/AIUI
 - https://github.com/alesaccoia/VoiceStreamAI
+- https://github.com/gkamradt/QuickAgent/
 - https://github.com/ccappetta/bidirectional_streaming_ai_voice
 - https://medium.com/@sujanxchhetri/creating-a-chatbot-using-socket-io-api-ai-and-web-speech-api-844c3177596b
