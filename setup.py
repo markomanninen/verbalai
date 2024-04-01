@@ -13,7 +13,9 @@ setup(
         'keyboard',
         'python-dotenv',
         'SpeechRecognition',
-        'websockets'
+        'websockets',
+        'deepgram-sdk',
+        'openai'
     ],
     extras_require={
         'mp3': [

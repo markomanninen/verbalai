@@ -4,3 +4,5 @@ keyboard
 python-dotenv
 SpeechRecognition
 websockets
+deepgram-sdk
+openai
