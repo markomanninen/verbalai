@@ -15,6 +15,11 @@ from queue import Queue, Empty
 from dotenv import load_dotenv
 load_dotenv()
 
+# Import log lonfig as a side effect only
+from verbalai import log_config
+import logging
+logger = logging.getLogger(__name__)
+
 # ElevenLabs API WebSocket URI
 stream_uri = "wss://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream-input?model_id={model_id}{output_format}&optimize_streaming_latency=4"
 
@@ -74,6 +79,8 @@ class ElevenlabsIO:
                     self.buffer.extend(audio_chunk)
                     self.stream.write(audio_chunk)
                 else:
+                    # Empty audio chunk received, exit the loop.
+                    # This should not happen too often.
                     print("Empty audio chunk received. Exit the loop")
                     break
             except Empty:
@@ -87,9 +94,22 @@ class ElevenlabsIO:
         # Wav format requires additional parameters for PCM (Pulse-code modulation) sample rate
         output_format = f"&output_format=pcm_{self.bit_rate}"
         
+        # Construct the WebSocket URI for ElevenLabs API
         uri = stream_uri.format(voice_id=voice_id, model_id=model_id, output_format=output_format)
         
+        # Start the playback thread if it's not running
+        # This ensures that the audio is played also from the second time and onwards
+        if not self.playback_thread.is_alive():
+            self.playback_active = True
+            self.playback_thread = Thread(target=self.playback_audio, daemon=True)
+            self.playback_thread.start()
+        
+        start_time = time.time()
+        audio_stream_start, text_stream_start, connect_stream_start = 0, 0, 0
+        
         with connect(uri, additional_headers=extra_headers) as ws:
+            
+            connect_stream_start = time.time()
             
             # Initialize PyAudio stream
             self.stream = self.audio.open(
@@ -117,15 +137,22 @@ class ElevenlabsIO:
             
             # Stream text chunks
             for chunk in text_chunker(text_stream):
+                if not text_stream_start:
+                    text_stream_start = time.time()
                 ws.send(dumps({
                     "text": chunk, 
                     "try_trigger_generation": True
                 }))
                 # Start receiving audio chunks already when the text is being sent
                 try:
-                    data = loads(ws.recv(1e-4))
-                    if "audio" in data and data["audio"]:
-                        audio_chunk = b64decode(data["audio"])
+                    # The recv method is used to receive the next message from the WebSocket. 
+                    # The argument 1e-4 is the timeout for receiving the message, in seconds. 
+                    # If no message is received within this time, a TimeoutError is raised.
+                    response = loads(ws.recv(1e-4))
+                    if "audio" in response and response["audio"]:
+                        if not audio_stream_start:
+                            audio_stream_start = time.time()
+                        audio_chunk = b64decode(response["audio"])
                         if buffering:
                             # Accumulate audio data in the buffer
                             audio_buffer += audio_chunk
@@ -134,13 +161,25 @@ class ElevenlabsIO:
                                 self.audio_queue.put(audio_buffer)
                                 audio_buffer = b''  # Reset the buffer for subsequent chunks
                                 buffering = False  # Stop buffering, start real-time playback
+                                logger.debug("Buffering complete, starting real-time playback.")
                         else:
                             # Real-time playback mode, directly queue incoming chunks
                             self.audio_queue.put(audio_chunk)
                         timediff = (time.time() - lasttime) if lasttime else 0
                         totaltime += timediff
                         lasttime = time.time()
-                        #print(f"{round(timediff, 3)} Received audio chunk #1: {len(audio_chunk)} bytes.")
+                        logger.debug(f"{round(timediff, 3)} Received audio chunk #1: {len(audio_chunk)} bytes.")
+                    elif response.get('isFinal', False):
+                        # Elevenlab stream ended
+                        # Handle any remaining audio in the buffer
+                        if audio_buffer:
+                            self.audio_queue.put(audio_buffer)
+                            audio_buffer = b''
+                        self.audio_queue.put("END OF STREAM")
+                    elif 'error' in response:
+                        logger.warn(f"Elevenlabs websocket error: {response['message']}")
+                    else:
+                        logger.warn(f"Elevenlabs unknown response: {response}")
                 except TimeoutError:
                     pass
 
@@ -152,6 +191,8 @@ class ElevenlabsIO:
                 try:
                     response = loads(message)
                     if 'audio' in response and response['audio']:
+                        if not audio_stream_start:
+                            audio_stream_start = time.time()
                         # Decode the base64 audio chunk coming from Elevenlabs
                         audio_chunk = b64decode(response['audio'])
                         if buffering:
@@ -177,11 +218,15 @@ class ElevenlabsIO:
                             audio_buffer = b''
                         self.audio_queue.put("END OF STREAM")
                     elif 'error' in response:
-                        print(f"Elevenlabs websocket error: {response['message']}")
+                        logger.warn(f"Elevenlabs websocket error: {response['message']}")
                     else:
-                        print(f"Elevenlabs unknown response: {response}")
+                        logger.warn(f"Elevenlabs unknown response: {response}")
                 except ConnectionClosed as e:
-                    print(f"Elevenlabs websocket error: {e}")
+                    logger.warn(f"Elevenlabs websocket error: {e}")
+        
+        logger.info(f"Connect stream start: {round(connect_stream_start - start_time, 6)} seconds.")
+        logger.info(f"Text stream start: {round(text_stream_start - start_time, 6)} seconds.")
+        logger.info(f"Audio stream start: {round(audio_stream_start - start_time, 6)} seconds.")
     
     def get_audio_bytes(self):
         """ Get the buffered audio data as bytes. """
@@ -209,7 +254,7 @@ class ElevenlabsIO:
                     self.stream.stop_stream()
                     self.stream.close()
             except Exception as e:
-                print(f"Error during stream cleanup: {e}")
+                logger.error(f"Error during stream cleanup: {e}")
             finally:
                 self.stream = None
     
