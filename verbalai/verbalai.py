@@ -1,4 +1,5 @@
 # verbalai.py - A Python script for near real-time voice-to-text, text to prompt text and text-to-speech interaction with an AI chatbot.
+# Native library imports
 import os
 import re
 import io
@@ -7,17 +8,38 @@ import time
 import json
 import wave
 import argparse
-import keyboard
 import traceback
 import subprocess
 import urllib.request
 from queue import Empty
 from threading import Thread
-from anthropic import Anthropic
+from contextlib import contextmanager
 from multiprocessing import Process, Queue
+# Installed packages
+import keyboard
+from anthropic import Anthropic
+from openai import OpenAI
 from colorama import init, Fore, Style, Back
-from speech_recognition import Recognizer, Microphone, AudioData, UnknownValueError, RequestError
+from speech_recognition import (
+    Recognizer, 
+    Microphone, 
+    AudioData, 
+    UnknownValueError, 
+    RequestError
+)
+# Library imports
+from .prompts import (
+    short_mode, 
+    long_mode, 
+    previous_context, 
+    system_message, 
+    summary_generator_prompt
+)
 
+# Import log lonfig as a side effect only
+from verbalai import log_config
+import logging
+logger = logging.getLogger(__name__)
 
 # Check if ffmpeg is installed
 def is_ffmpeg_installed():
@@ -62,8 +84,8 @@ init(autoreset=True)
 # Global variables
 default_input_voice_recognition_language = "en-US"
 feedback_word_buffer_limit = 25
-feedback_token_limit = 20
-response_token_limit = 50
+feedback_token_limit = 25
+response_token_limit = 250
 phrase_time_limit = 10
 calibration_time = 2
 
@@ -73,12 +95,22 @@ verbose = False
 # Anthropic Claude GPT model
 gpt_model = "claude-3-haiku-20240307"
 
-# Available Anthropic Claude GPT models
-available_models = [
+# Available Anthropic Claude and OpenAI GPT models
+anthropic_models = [
     "claude-3-opus-20240229",
     "claude-3-sonnet-20240229",
     "claude-3-haiku-20240307"
-]  
+]
+
+openai_models = [
+    "gpt-4-turbo-preview",
+    "gpt-4",
+    "gpt-3.5-turbo",
+    "gpt-3.5-turbo-16k"
+]
+
+# Available models for the chatbot
+available_models = anthropic_models + openai_models
 
 # Eleven Labs voice ID: Male voice (Drew)
 voice_id = "29vD33N1CtxCmqQRPOHJ"
@@ -118,9 +150,13 @@ username = "VerbalHuman"
 # Initialize the audio recorder
 audio_recorder = None
 
-# Initialize the GPT client
+# Initialize the GPT clients
 # Note: dotenv handles the API key loading
+# Initialize the Anthropic client
 gpt_client = Anthropic()
+
+# Initialize the OpenAI client
+gpt_client_openai = OpenAI()
 
 # Initialize the session message buffer
 messages = []
@@ -143,55 +179,19 @@ summary, summary_file = "", ""
 # Either local file or url (wav / mp3)
 audio_file_source = ""
 
-# System message part for the GPT model
-short_mode = "You are currently in the short response mode. Respond to the user's input with a short one full complete sentence."
-
-# System message part for the GPT model
-long_mode = "You are currently in the long response mode. Respond to the user's input with a long detailed response."
-
-previous_context = """
-
-You can use the context from the previous conversation with the user to generate more coherent responses.
-
-Summary of the previous discussions:
-
-<<summary>>
-"""
-
-# System message template for the GPT model
-system_message = """
-You are VerbalAI chatbot implemented as a command-line tool. You can understand voice input with a voice-to-text recognition service, generate meaningful responses with your internal GPT model and speak responses to user via text-to-speech service.
-
-You have two modes in responding: 1) a short response mode for the intermediate feedback / quick dialogue and 2) a long detailed response mode for the final feedback.
-
-<<mode>>
-
-Restrictions: Do NOT use asterisk action / tone indicators / emotes similar to *listening* or *whispering*, etc. in your response.
-
-You are speaking with: <<user>>
-Date and time is now: <<datetime>>
-<<previous_context>>
-"""
-
-# Generate a summary -prompt
-summary_generator_prompt = """
-Generate a summary of the conversation given below:
-
-<<summary>>
-"""
 
 ###################################################
 # CONSOLE MAGIC
 ###################################################
 
 def blink_cursor():
-    # Enable cursor blinking right after feedback
+    """ Blinks the cursor to indicate that the system is waiting for user input. """
     sys.stdout.write('\033[?12h')
     sys.stdout.flush()
 
 
 def freeze_cursor():
-    # Disable cursor blinking
+    """ Freezes the cursor to prevent user input during system output. """
     sys.stdout.write('\033[?12l')
     sys.stdout.flush()
 
@@ -259,12 +259,38 @@ def prompt(text, final=False):
     # Generate the system message with the current mode, username, datetime, and previous context
     system = system_message.replace("<<mode>>", long_mode if final else short_mode).replace("<<user>>", username).replace("<<datetime>>", time.strftime("%Y-%m-%d %H:%M:%S")).replace("<<previous_context>>", previous_context.replace("<<summary>>", summary) if summary else "")
     
-    with gpt_client.messages.stream(
-        model = gpt_model,
-        messages = messages,
-        max_tokens = response_token_limit if final else feedback_token_limit,
-        system = system
-    ) as gpt_stream:
+    @contextmanager
+    def get_gpt_stream():
+        """ Get the GPT API stream for generating responses. """
+        try:
+            # Check if the GPT model is an Anthropic model
+            if gpt_model in anthropic_models:
+                with gpt_client.messages.stream(
+                    model = gpt_model,
+                    messages = messages,
+                    max_tokens = response_token_limit if final else feedback_token_limit,
+                    system = system
+                ) as stream:
+                    yield stream.text_stream
+            # Else assume OpenAI model
+            else:
+                def openai_stream():
+                    chunks = gpt_client_openai.chat.completions.create(
+                        model = gpt_model,
+                        messages = [{"role": "system", "content": system}] + messages,
+                        max_tokens = response_token_limit if final else feedback_token_limit,
+                        stream = True,
+                    )
+                    for chunk in chunks:
+                        if chunk.choices[0].delta.content:
+                            yield chunk.choices[0].delta.content
+                # Yield the generator itself for with context
+                yield openai_stream()
+        except Exception as e:
+            logger.error(f"Error getting GPT stream: {e}")
+            raise
+    
+    with get_gpt_stream() as gpt_stream:
 
         response = ""
         
@@ -278,8 +304,7 @@ def prompt(text, final=False):
         def text_stream():
             """ Stream the text from the GPT API response to console and text to speech service at the same time. """
             nonlocal response
-            for processed_text in gpt_stream.text_stream:
-                #processed_text = ' '.join(words_batch) + " "
+            for processed_text in gpt_stream:
                 print(color + processed_text, end="", flush=True)
                 response += processed_text
                 yield processed_text
@@ -293,25 +318,24 @@ def prompt(text, final=False):
                 try:
                     elevenlabs_streamer.process(voice_id, voice_model_id, text_stream())
                 except ConnectionResetError:
-                    print("Connection was reset by the server.")
+                    logger.error("Connection was reset by the server.")
                 except Exception as e:
-                    print(f"Error streaming audio: {e}")
+                    logger.error(f"Error streaming audio: {e}")
                     if verbose:
-                        print("Traceback:")
                         traceback.print_exc()
                 
                 audio_content = elevenlabs_streamer.get_audio_bytes()
                 if audio_content:
                     save_audio_to_file(audio_content, prefix="output", extension=elevenlabs_output_format)
                 else:
-                    print("Could not finalize generating audio content.")
+                    logger.error("Could not finalize generating audio content.")
                 
                 elevenlabs_streamer.cleanup()
                 
                 # Recover the audio recorder speaking status
                 audio_recorder.pause = False
             else:
-                for t in gpt_stream.text_stream:
+                for t in gpt_stream:
                     print(color + t, end="", flush=True)
                     response += t
             # Add the response to the messages buffer
@@ -323,18 +347,13 @@ def prompt(text, final=False):
             # Print the response to the console in real-time
             # This is the feedback response, so we won't use the text-to-speech service
             # or store the response in the messages buffer until the final response is requested
-            for t in gpt_stream.text_stream:
+            for t in gpt_stream:
                 print(color + t, end="", flush=True)
                 response += t
         
         # Increase the message word count for total GPT API usage indication
         inference_message_word_count += len(response.strip().split(" "))
-        print(Fore.WHITE + f"\r\n(GPT message container word count: {inference_message_word_count})")
-        if final:
-            print("--------------------------------------")
-        # Enable cursor blinking after the response is output
-        if audio_recorder.toggle_listener:
-            blink_cursor()
+        print(Fore.WHITE + f"\r\n{inference_message_word_count} words used in the session")
         # Return response for saving to log file
         return response
 
@@ -376,9 +395,8 @@ def gpt_inference(text, final=False):
         # Perform GPT inference on the given text prompt
         response_text = prompt(text, final)
     except Exception as e:
-        print(f"Error processing text; {e}")
+        logger.error(f"Error processing text; {e}")
         if verbose:
-            print("Traceback:")
             traceback.print_exc()
         return False
     
@@ -433,6 +451,7 @@ def process_text(text, word_buffer):
         # but make the response an intermediate feedback only
         gpt_inference(" ".join(word_buffer), False)
         word_buffer.clear()
+        blink_cursor()
 
 
 def save_audio_to_file(audio_data, prefix="output", extension="mp3"):
@@ -546,9 +565,9 @@ def audio_processing_worker(input_queue, language, text_queue):
             # Google Speech Recognition could not understand the audio
             print('?', end='\r')
         except RequestError as e:
-            print(f"Could not request results from Google Speech Recognition service; {e}")
+            logger.error(f"Could not request results from Google Speech Recognition service; {e}")
         except Exception as e:
-            print(f"Error processing audio; {e}")
+            logger.error(f"Error processing audio; {e}")
 
 
 class AudioRecorder:
@@ -895,7 +914,7 @@ def summary_generator():
                         file.write("".join(gpt_stream.text_stream))
                     print(f" See the file: {file_path}.")
             except Exception as e:
-                print(f" Error generating summary; {e}")
+                logger.error(f" Error generating summary; {e}")
         else:
             print("No conversation history to summarize.")
         audio_recorder.pause = False
@@ -1039,9 +1058,11 @@ def listen_for_flush_command():
                 if disable_voice_recognition:
                     print(Fore.RED + f"\r\nPlease wait for GPT inference. Then resume back to the input mode with {hotkey_prompt}" + Fore.WHITE)
                 else:
-                    print(Fore.RED + f"\r\nListener paused. Please wait for GPT inference. Then resume back to the recording mode with {hotkey_pause}." + Fore.WHITE)
+                    print(Fore.RED + f"\r\nListener paused. Please wait for GPT inference." + Fore.WHITE)
                 # Perform a full length GPT inference on the collected prompt
                 gpt_inference(" ".join(audio_recorder.word_buffer), True)
+                # Provide feedback to user to resume the recording mode
+                print(Fore.RED + f"\r\nResume back to the recording mode with {hotkey_pause}." + Fore.WHITE)
                 # Clear the word buffer after processing
                 audio_recorder.word_buffer.clear()
             else:
@@ -1189,7 +1210,7 @@ def main():
     parser.add_argument("-v", "--voice_id", type=str, help=f"Elevenlabs voice id (default: {voice_id})", default=voice_id)
     
     models = ", ".join(available_models)
-    parser.add_argument("-m", "--gpt_model", type=str, choices=available_models, help=f"Anthropic Claude GPT language model. Available models: {models} (default: {gpt_model})", default=gpt_model)
+    parser.add_argument("-m", "--gpt_model", type=str, help=f"Anthropic Claude / OpenAI GPT language model. Available models: {models} (default: {gpt_model})", default=gpt_model)
     
     parser.add_argument("-u", "--username", type=str, help=f"Chat username (default: {username})", default=username)
     
@@ -1215,6 +1236,9 @@ def main():
     
     args = parser.parse_args()
     
+    if args.gpt_model not in available_models:
+        parser.error(f"The specified model is not supported. Please choose from the following models: {models}")
+    
     # Set the output audio format for Eleven Labs
     elevenlabs_output_format = args.output_audio_format
     
@@ -1229,6 +1253,8 @@ def main():
     except argparse.ArgumentTypeError as e:
         print(f"Error: {e}")
         sys.exit(1)
+        
+    logger.info("Program started.")
     
     # Set the output audio bitrate for Eleven Labs
     # This is relevant for mp3 format only
@@ -1348,6 +1374,7 @@ def main():
         elevenlabs_streamer.quit()
         audio_recorder.cleanup()
         freeze_cursor()
+        logger.info("Program exited.")
         print(Fore.WHITE + "Program exited.\n")
 
 
