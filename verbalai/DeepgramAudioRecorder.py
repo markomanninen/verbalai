@@ -17,8 +17,7 @@ from deepgram import (
     FileSource,
     UrlSource,
     PrerecordedOptions,
-    Microphone,
-    DeepgramClientOptions
+    Microphone
 )
 # Library imports
 # Import log lonfig as a side effect only
@@ -27,10 +26,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
-
-config = DeepgramClientOptions(
-    options={"keepalive": "true"}
-)
 
 deepgram: DeepgramClient = DeepgramClient(DEEPGRAM_API_KEY)
 
@@ -55,6 +50,7 @@ class AudioRecorder:
         self.first_word_start = 0
         
         self.dg_connection = deepgram.listen.live.v("1")
+        # Register event listeners for the Deepgram connection
         self.dg_connection.on(LiveTranscriptionEvents.Open, self.on_open)
         self.dg_connection.on(LiveTranscriptionEvents.Transcript, self.on_message)
         self.dg_connection.on(LiveTranscriptionEvents.Metadata, self.on_metadata)
@@ -63,8 +59,12 @@ class AudioRecorder:
         self.dg_connection.on(LiveTranscriptionEvents.Error, self.on_error)
         self.dg_connection.on(LiveTranscriptionEvents.Close, self.on_close)
         
+        # Queue for storing incoming transcription tokens
+        # and sending them to the message handler
         self.text_queue = Queue()
+        # Not used in Deepgram implementation
         self.word_buffer = []
+        self.previous_speaker = None
 
         self.active = True
         self.toggle_listener = True
@@ -77,17 +77,24 @@ class AudioRecorder:
         os.makedirs(self.session_dir, exist_ok=True)
     
     def on_open(self, dg, open, **kwargs):
+        """ Callback function for incoming open events. """
         logger.info(f"Connection opened")
         if self.streaming:
+            # Define a function to send KeepAlive messages to the server
             def keep_alive():
                 last_keep_alive_time = time.time()
                 start_time = time.time()
                 while self.dg_connection:
+                    # Send a KeepAlive message every 5 seconds
                     keep_alive_msg = dumps({"type": "KeepAlive"})
                     self.dg_connection.send(keep_alive_msg)
                     logger.debug("Sent KeepAlive message")
-                    time.sleep(3)
+                    time.sleep(5)
                     now = time.time()
+                    # Remind the user to press Enter to close the stream every 30 seconds
+                    # This is particularly useful for long-running streams
+                    # and when the stream has ended but the user has not pressed Enter
+                    # to close the stream connection
                     if now - last_keep_alive_time > 30:
                         # Convert elapsed time into hours, minutes, and seconds
                         hours = int((now - start_time) // 3600)
@@ -101,45 +108,65 @@ class AudioRecorder:
             keep_alive_thread.start()
 
     def on_message(self, dg, result, **kwargs):
-        sentence = result.channel.alternatives[0].transcript
+        """ Callback function for incoming transcription tokens. """
+        #sentence = result.channel.alternatives[0].transcript
+        
+        sentence = ""
+        for word in result.channel.alternatives[0].words:
+            if word.speaker and word.speaker != self.previous_speaker:
+                sentence += f"(Speaker:{word.speaker}) "
+                self.previous_speaker = word.speaker
+            sentence += f"{word.word} "
         if len(sentence) == 0:
             return
+        
+        #print(sentence)
+        
         if self.streaming and result.is_final:
-            #self.word_buffer.extend(sentence.split(" "))
             self.text_queue.put(sentence)
             self.utterance = ""
         else:
-            self.utterance = sentence
-        logger.debug([sentence, result.is_final, result.speech_final])
+            if result.is_final:
+                self.text_queue.put(sentence)
+                self.utterance = ""
+            else:
+                self.utterance = sentence
+        logger.debug("On message: %s", sentence)
+        #logger.info(result)
+        # Live view to incoming transciption tokens
         #print(f"> {sentence}", end="\r\n" if result.is_final and result.speech_final else "\r", flush=True)
 
     def on_metadata(self, dg, metadata, **kwargs):
+        """ Callback function for incoming metadata. """
         logger.info(f"On metadata (duration: {metadata.duration})")
         if self.streaming and self.utterance:
             logger.debug(f"On metadata (utterance: {self.utterance}")
-            #self.word_buffer.extend(self.utterance.split(" "))
             self.text_queue.put(self.utterance)
             self.utterance = ""
         print(f"Speech duration: {metadata.duration}")
 
     def on_speech_started(self, dg, speech_started, **kwargs):
+        """ Callback function for incoming speech start events. """
         self.first_word_start = speech_started["timestamp"]
+        logger.info(speech_started)
 
     def on_utterance_end(self, dg, utterance_end, **kwargs):
+        """ Callback function for incoming utterance end events. """
+        #print(utterance_end, self.utterance)
         if self.utterance:
             logger.debug(f"On utterance end (utterance: {self.utterance}")
-            #self.word_buffer.extend(self.utterance.split(" "))
             self.text_queue.put(self.utterance)
             self.last_word_end = utterance_end["last_word_end"]
             self.utterance = ""
 
     def on_error(self, dg, error, **kwargs):
+        """ Callback function for incoming error messages. """
         logger.error(error)
 
     def on_close(self, dg, close, **kwargs):
+        """ Callback function for incoming close events. """
         if self.streaming and self.utterance:
             logger.debug(f"On close (utterance: {self.utterance}")
-            #self.word_buffer.extend(self.utterance.split(" "))
             self.text_queue.put(self.utterance)
             self.utterance = ""
         logger.info("Connection closed")
@@ -198,16 +225,17 @@ class AudioRecorder:
                     if data and self.dg_connection:
                         self.dg_connection.send(data)
 
-        # signal finished
-        # start the worker thread
+        # Start the worker thread
         myHttp = threading.Thread(target=myThread)
         myHttp.start()
         
+        # Wait for the user to press Enter
         try:
             input("")
         except KeyboardInterrupt:
             raise
         
+        # Stop the worker thread after the user presses Enter
         lock_exit.acquire()
         exit = True
         lock_exit.release()
@@ -235,7 +263,6 @@ class AudioRecorder:
         response = deepgram.listen.prerecorded.v("1").transcribe_file(payload, options)
         # Print the response to buffer, queue, and log
         transcript = response["results"]["channels"][0]["alternatives"][0]["transcript"]
-        #self.word_buffer.extend(transcript.split(" "))
         self.text_queue.put(transcript)
         logger.debug(f"Process from file: {transcript}")
         #print(response.to_json(indent=4))
@@ -255,7 +282,6 @@ class AudioRecorder:
         response = deepgram.listen.prerecorded.v("1").transcribe_url(payload, options)
         # Output the response to buffer, queue, and log
         transcript = response["results"]["channels"][0]["alternatives"][0]["transcript"]
-        #self.word_buffer.extend(transcript.split(" "))
         self.text_queue.put(transcript)
         logger.debug(f"Process from URL: {transcript}")
         #print(response.to_json(indent=4))
@@ -275,7 +301,7 @@ class AudioRecorder:
             sample_rate=16000,
             # To get UtteranceEnd, the following must be set:
             interim_results=True,
-            utterance_end_ms="1000",
+            utterance_end_ms="1500",
             vad_events=True,
         )
         # Start the Deepgram connection
