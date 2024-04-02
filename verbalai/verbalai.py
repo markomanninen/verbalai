@@ -77,7 +77,7 @@ feedback_word_buffer_limit = 25
 feedback_token_limit = 20
 response_token_limit = 150
 # For testing purposes, set the phrase time limit to 5 seconds
-feedback_word_buffer_limit = 15
+feedback_word_buffer_limit = 25
 feedback_token_limit = 10
 response_token_limit = 20
 
