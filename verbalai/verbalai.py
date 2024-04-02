@@ -25,6 +25,7 @@ from .prompts import (
     summary_generator_prompt
 )
 from .audio_stream_server import ServerThread
+from .deepgramio import DeepgramIO
 
 # Import log lonfig as a side effect only
 from .log_config import setup_logging
@@ -110,6 +111,9 @@ available_models = anthropic_models + openai_models
 # Eleven Labs voice ID: Male voice (Drew)
 voice_id = "29vD33N1CtxCmqQRPOHJ"
 
+# Deepgram voice ID
+deegram_voice_id = "aura-asteria-en"
+
 # Eleven Labs voice model ID
 # eleven_monolingual_v1, eleven_multilingual_v1
 voice_model_id = "eleven_multilingual_v2"
@@ -183,6 +187,10 @@ audio_host = "127.0.0.1"
 audio_port = 5000
 audio_stream = False
 
+deepgram_streamer = None
+
+use_deepgram_streamer = False
+
 ###################################################
 # CONSOLE MAGIC
 ###################################################
@@ -246,7 +254,7 @@ def prompt(text, final=False):
     - str: The generated response to the input text, for logging or further processing.
     """
     
-    global inference_message_word_count, gpt_model, system_message, messages, short_mode, long_mode, username, response_token_limit, feedback_token_limit, voice_model_id, elevenlabs_streamer, disable_voice_output, verbose
+    global inference_message_word_count, gpt_model, system_message, messages, short_mode, long_mode, username, response_token_limit, feedback_token_limit, voice_model_id, elevenlabs_streamer, disable_voice_output, verbose, deepgram_streamer
     
     text = text.strip()
     
@@ -262,10 +270,14 @@ def prompt(text, final=False):
     # Generate the system message with the current mode, username, datetime, and previous context
     system = system_message.replace("<<mode>>", long_mode if final else short_mode).replace("<<user>>", username).replace("<<datetime>>", time.strftime("%Y-%m-%d %H:%M:%S")).replace("<<previous_context>>", previous_context.replace("<<summary>>", summary) if summary else "")
     
+    start_time = None
     @contextmanager
     def get_gpt_stream():
         """ Get the GPT API stream for generating responses. """
+        nonlocal start_time
         try:
+            logger.info(f"Open GPT text stream. Start timer.")
+            start_time = time.time()
             # Check if the GPT model is an Anthropic model
             if gpt_model in anthropic_models:
                 with gpt_client.messages.stream(
@@ -293,6 +305,8 @@ def prompt(text, final=False):
             logger.error(f"Error getting GPT stream: {e}")
             raise
     
+    streamer = elevenlabs_streamer if elevenlabs_streamer else deepgram_streamer
+    
     with get_gpt_stream() as gpt_stream:
 
         response = ""
@@ -311,7 +325,7 @@ def prompt(text, final=False):
                 print(color + processed_text, end="", flush=True)
                 response += processed_text
                 yield processed_text
-                time.sleep(0.25)
+                #time.sleep(0.25)
         
         if final:
             if not disable_voice_output:
@@ -319,7 +333,7 @@ def prompt(text, final=False):
                 audio_recorder.pause = True
                 # Start the Eleven Labs text-to-speech streaming only if final response is requested
                 try:
-                    elevenlabs_streamer.process(voice_id, voice_model_id, text_stream())
+                    streamer.process(voice_id, voice_model_id, text_stream, start_time)
                 except ConnectionResetError:
                     logger.error("Connection was reset by the server.")
                 except Exception as e:
@@ -327,13 +341,13 @@ def prompt(text, final=False):
                     if verbose:
                         traceback.print_exc()
                 
-                audio_content = elevenlabs_streamer.get_audio_bytes()
+                audio_content = streamer.get_audio_bytes()
                 if audio_content:
                     save_audio_to_file(audio_content, prefix="output", extension=elevenlabs_output_format)
                 else:
                     logger.error("Could not finalize generating audio content.")
                 
-                elevenlabs_streamer.cleanup()
+                streamer.cleanup()
                 
                 # Recover the audio recorder speaking status
                 audio_recorder.pause = False
@@ -865,7 +879,7 @@ def main():
     - `-di`, `--disable_voice_recognition`: Disable Google voice recognition.
     - `-sf`, `--summary_file`: Import previous context for the discussion from the summary file.
     """
-    global audio_recorder, feedback_word_buffer_limit, voice_id, gpt_model, username, verbose, available_models, elevenlabs_streamer, phrase_time_limit, calibration_time, elevenlabs_output_format, disable_voice_output, disable_voice_recognition, summary, summary_file, elevenlabs_output_sample_rate, elevenlabs_output_bit_rate, audio_file_source, audio_recorder_type, audio_dir, audio_host, audio_port, audio_stream
+    global audio_recorder, feedback_word_buffer_limit, voice_id, gpt_model, username, verbose, available_models, elevenlabs_streamer, phrase_time_limit, calibration_time, elevenlabs_output_format, disable_voice_output, disable_voice_recognition, summary, summary_file, elevenlabs_output_sample_rate, elevenlabs_output_bit_rate, audio_file_source, audio_recorder_type, audio_dir, audio_host, audio_port, audio_stream, deepgram_streamer, use_deepgram_streamer
     
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Bidirectional Chat with Speech Recognition")
@@ -913,6 +927,8 @@ def main():
     
     parser.add_argument("-as", "--audio_stream", action=('store_false' if audio_stream else 'store_true'), help=f"Should we stream source audio files? (default: {audio_stream})")
     
+    parser.add_argument("-dg", "--use_deepgram_streamer", action=('store_false' if use_deepgram_streamer else 'store_true'), help=f"Should we use deepgram for streaming text to voice? (default: {use_deepgram_streamer})")
+    
     args = parser.parse_args()
     
     if args.gpt_model not in available_models:
@@ -920,44 +936,48 @@ def main():
     
     if audio_dir and not os.path.exists(audio_dir):
         os.makedirs(audio_dir, exist_ok=True)
-    
-    # Set the output audio format for Eleven Labs
-    elevenlabs_output_format = args.output_audio_format
-    
-    try:
-        # Additional validation for MP3 format
-        if elevenlabs_output_format == "mp3":
-            # Ensure the bit rate is valid for the selected sample rate
-            validate_mp3_args(args.output_bit_rate, args.output_sample_rate)
-        else:
-            # Ensure the sample rate is valid for the WAV format
-            validate_wav_args(args.output_bit_rate)
-    except argparse.ArgumentTypeError as e:
-        print(f"Error: {e}")
-        sys.exit(1)
-        
+            
     logger.info("Program started.")
-    
-    # Set the output audio bitrate for Eleven Labs
-    # This is relevant for mp3 format only
-    elevenlabs_output_sample_rate = args.output_sample_rate
-    
-    # Set the output audio samplerate for Eleven Labs
-    elevenlabs_output_bit_rate = args.output_bit_rate
-    
-    # Import the correct ElevenlabsIO module based on the command line format argument
-    ElevenlabsIO = import_elevenlabs_module(elevenlabs_output_format)
-    
-    # Initialize the Eleven Labs streamer
-    if elevenlabs_output_format == "wav":
-        # For WAV format, only the bit rate is needed
-        kwargs = {"bit_rate": elevenlabs_output_bit_rate}
+        
+    if args.use_deepgram_streamer:
+        # Initialize the Deepgram streamer
+        deepgram_streamer = DeepgramIO()
     else:
-        # For MP3 format, both the sample rate and bit rate are needed
-        kwargs = {"sample_rate": elevenlabs_output_sample_rate, "bit_rate": elevenlabs_output_bit_rate}
+        # Set the output audio format for Eleven Labs
+        elevenlabs_output_format = args.output_audio_format
+        
+        try:
+            # Additional validation for MP3 format
+            if elevenlabs_output_format == "mp3":
+                # Ensure the bit rate is valid for the selected sample rate
+                validate_mp3_args(args.output_bit_rate, args.output_sample_rate)
+            else:
+                # Ensure the sample rate is valid for the WAV format
+                validate_wav_args(args.output_bit_rate)
+        except argparse.ArgumentTypeError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
     
-    # Initialize the Eleven Labs streamer with the appropriate arguments
-    elevenlabs_streamer = ElevenlabsIO(**kwargs)
+        # Set the output audio bitrate for Eleven Labs
+        # This is relevant for mp3 format only
+        elevenlabs_output_sample_rate = args.output_sample_rate
+        
+        # Set the output audio samplerate for Eleven Labs
+        elevenlabs_output_bit_rate = args.output_bit_rate
+        
+        # Import the correct ElevenlabsIO module based on the command line format argument
+        ElevenlabsIO = import_elevenlabs_module(elevenlabs_output_format)
+        
+        # Initialize the Eleven Labs streamer
+        if elevenlabs_output_format == "wav":
+            # For WAV format, only the bit rate is needed
+            kwargs = {"bit_rate": elevenlabs_output_bit_rate}
+        else:
+            # For MP3 format, both the sample rate and bit rate are needed
+            kwargs = {"sample_rate": elevenlabs_output_sample_rate, "bit_rate": elevenlabs_output_bit_rate}
+        
+        # Initialize the Eleven Labs streamer with the appropriate arguments
+        elevenlabs_streamer = ElevenlabsIO(**kwargs)
     
     # Set the word buffer limit
     feedback_word_buffer_limit = args.feedback_limit
@@ -965,7 +985,7 @@ def main():
     # Set the Anthropic Claude GPT model
     gpt_model = args.gpt_model
     
-    # Set the Eleven Labs voice ID
+    # Set the Eleven Labs / Deepgram voice ID
     voice_id = args.voice_id
     
     # Verbose print debug
@@ -1103,7 +1123,10 @@ def main():
             server_thread.shutdown()
     finally:
         # Cleanup the resources and exit the program
-        elevenlabs_streamer.quit()
+        if elevenlabs_streamer:
+            elevenlabs_streamer.quit()
+        if deepgram_streamer:
+            deepgram_streamer.quit()
         audio_recorder.cleanup()
         freeze_cursor()
         logger.info("Program exited.")
