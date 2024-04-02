@@ -24,6 +24,7 @@ from .prompts import (
     system_message, 
     summary_generator_prompt
 )
+from .audio_stream_server import ServerThread
 
 # Import log lonfig as a side effect only
 from .log_config import setup_logging
@@ -75,9 +76,11 @@ default_input_voice_recognition_language = "en-US"
 feedback_word_buffer_limit = 25
 feedback_token_limit = 20
 response_token_limit = 150
-feedback_word_buffer_limit = 5
+# For testing purposes, set the phrase time limit to 5 seconds
+feedback_word_buffer_limit = 15
 feedback_token_limit = 10
 response_token_limit = 20
+
 phrase_time_limit = 10
 calibration_time = 2
 
@@ -174,6 +177,11 @@ summary, summary_file = "", ""
 # Either local file or url (wav / mp3)
 audio_file_source = ""
 
+# Audio file server settings
+audio_dir = "audio_files"
+audio_host = "127.0.0.1"
+audio_port = 5000
+audio_stream = False
 
 ###################################################
 # CONSOLE MAGIC
@@ -857,7 +865,7 @@ def main():
     - `-di`, `--disable_voice_recognition`: Disable Google voice recognition.
     - `-sf`, `--summary_file`: Import previous context for the discussion from the summary file.
     """
-    global audio_recorder, feedback_word_buffer_limit, voice_id, gpt_model, username, verbose, available_models, elevenlabs_streamer, phrase_time_limit, calibration_time, elevenlabs_output_format, disable_voice_output, disable_voice_recognition, summary, summary_file, elevenlabs_output_sample_rate, elevenlabs_output_bit_rate, audio_file_source, audio_recorder_type
+    global audio_recorder, feedback_word_buffer_limit, voice_id, gpt_model, username, verbose, available_models, elevenlabs_streamer, phrase_time_limit, calibration_time, elevenlabs_output_format, disable_voice_output, disable_voice_recognition, summary, summary_file, elevenlabs_output_sample_rate, elevenlabs_output_bit_rate, audio_file_source, audio_recorder_type, audio_dir, audio_host, audio_port, audio_stream
     
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Bidirectional Chat with Speech Recognition")
@@ -873,17 +881,19 @@ def main():
     
     parser.add_argument("-u", "--username", type=str, help=f"Chat username (default: {username})", default=username)
     
-    parser.add_argument("-vb", "--verbose", type=bool, help=f"Verbose mode for debug purposes (default: {verbose})", default=verbose)
+    parser.add_argument("-vb", "--verbose", action=('store_false' if verbose else 'store_true'), help=f"Verbose mode for debug purposes (default: {verbose})")
     
     parser.add_argument("-tl", "--time_limit", type=int, help=f"Phrase time limit for Google speech recognition (default: {phrase_time_limit})", default=phrase_time_limit)
     
     parser.add_argument("-ct", "--calibration_time", type=int, help=f"Calibration limit for Google speech recognition ambient background noise (default: {calibration_time})", default=calibration_time)
     
-    parser.add_argument("-do", "--disable_voice_output", type=bool, help=f"Disable Elevenlabs output audio? (default: {disable_voice_output})", default=disable_voice_output)
+    parser.add_argument("-do", "--disable_voice_output", action=('store_false' if disable_voice_output else 'store_true'), help=f"Disable Elevenlabs output audio? (default: {disable_voice_output})")
     
-    parser.add_argument("-di", "--disable_voice_recognition", type=bool, help=f"Disable Google voice recognition? (default: {disable_voice_recognition})", default=disable_voice_recognition)
+    parser.add_argument("-di", "--disable_voice_recognition", action=('store_false' if disable_voice_recognition else 'store_true'), help=f"Disable Google voice recognition? (default: {disable_voice_recognition})")
     
-    parser.add_argument("-sf", "--summary_file", type=bool, help=f"Import previous context for the discussion from the summary file (default: {summary_file})", default=summary_file)
+    parser.add_argument("-sf", "--summary_file", type=str, help=f"Import previous context for the discussion from the summary file (default: {summary_file})", default=summary_file)
+    
+    parser.add_argument("-s", "--summary", type=str, help=f"Provide previous context for the discussion from the text summary (default: {summary})", default=summary)
     
     parser.add_argument("-of", "--output_audio_format", type=str, choices=["wav", "mp3"], help=f"Elevenlabs output audio format can be either mp3 or wav (default: {elevenlabs_output_format})", default=elevenlabs_output_format)
     
@@ -895,10 +905,21 @@ def main():
     
     parser.add_argument("-at", "--audio_recorder_type", type=str, choices=["GoogleSpeech", "Deepgram"], help=f" (default: {audio_recorder_type})", default=audio_recorder_type)
     
+    parser.add_argument("-ah", "--audio_host", type=str, help=f"Audio host for streaming files (default: {audio_host})", default=audio_host)
+    
+    parser.add_argument("-ap", "--audio_port", type=int, help=f"Audio host port for streaming files (default: {audio_port})", default=audio_port)
+    
+    parser.add_argument("-ad", "--audio_dir", type=str, help=f"Audio directory for streaming files (default: {audio_dir})", default=audio_dir)
+    
+    parser.add_argument("-as", "--audio_stream", action=('store_false' if audio_stream else 'store_true'), help=f"Should we stream source audio files? (default: {audio_stream})")
+    
     args = parser.parse_args()
     
     if args.gpt_model not in available_models:
         parser.error(f"The specified model is not supported. Please choose from the following models: {models}")
+    
+    if audio_dir and not os.path.exists(audio_dir):
+        os.makedirs(audio_dir, exist_ok=True)
     
     # Set the output audio format for Eleven Labs
     elevenlabs_output_format = args.output_audio_format
@@ -984,6 +1005,10 @@ def main():
         else:
             print(f"Summary file ({summary_file}) does not exist.")
     
+    # Set previous conversation summary
+    if args.summary:
+        summary = args.summary
+    
     # Use the provided audio file source for recognition
     audio_file_source = args.file_source
     
@@ -1029,11 +1054,30 @@ def main():
     print(ascii_art)
     print("############################################################")
     
+    server_thread = None
+    
+    audio_stream = args.audio_stream
+    audio_host = args.audio_host
+    audio_port = args.audio_port
+    audio_dir = args.audio_dir
+    
     if audio_file_source:
         # Print the hotkeys for user interaction
         print(f"# You can enter text commands using {invert_text(hotkey_prompt)}.\n# To summarize dialogue, use {invert_text(hotkey_summarize)}.\n# Clear message history: {invert_text(hotkey_clear)}. Exit the bot: {invert_text(hotkey_exit)}.")
         print("############################################################\n")
-        audio_recorder.file_source(audio_file_source)
+        # Open server with audio directory and port
+        # Start the Flask server in a separate thread
+        if audio_stream:
+            server_thread = ServerThread(host=audio_host, port=audio_port, audio_dir=audio_dir)
+            server_thread.start()
+            # Set the audio file source to the local server URL
+            # unless it is already a valid URL
+            if not audio_file_source.startswith(('http://', 'https://')):
+                audio_file_source = f"http://{audio_host}:{audio_port}/stream_audio?filename={audio_file_source}"
+
+        # server_thread.join()
+        # When server is running:
+        audio_recorder.file_source(audio_file_source, stream=audio_stream)
     elif not disable_voice_recognition:
         kwargs = {
             "phrase_time_limit": phrase_time_limit,
@@ -1055,6 +1099,8 @@ def main():
     except KeyboardInterrupt:
         # Exit the program on keyboard interrupt
         audio_recorder.active = False
+        if server_thread:
+            server_thread.shutdown()
     finally:
         # Cleanup the resources and exit the program
         elevenlabs_streamer.quit()

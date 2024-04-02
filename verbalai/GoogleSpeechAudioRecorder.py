@@ -204,7 +204,7 @@ class AudioRecorder:
         self.session_dir = os.path.join(self.archive_dir, time.strftime("%Y%m%d-%H%M%S"))
         os.makedirs(self.session_dir, exist_ok=True)
     
-    def file_source(self, source):
+    def file_source(self, source, stream=False):
         """ Processes audio data from a file or URL for speech recognition. """
         self.worker_process.start()
         if source.startswith(('http://', 'https://')):

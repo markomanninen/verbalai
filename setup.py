@@ -15,7 +15,9 @@ setup(
         'SpeechRecognition',
         'websockets',
         'deepgram-sdk',
-        'openai'
+        'openai',
+        'flask',
+        'werkzeug'
     ],
     extras_require={
         'mp3': [

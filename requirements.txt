@@ -6,3 +6,5 @@ SpeechRecognition
 websockets
 deepgram-sdk
 openai
+flask
+werkzeug
