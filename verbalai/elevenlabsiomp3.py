@@ -8,6 +8,7 @@ from io import BytesIO
 import time
 from threading import Thread
 from queue import Queue, Empty
+# Installed packages
 from pydub import AudioSegment
 from pydub.playback import play
 
@@ -33,7 +34,7 @@ def text_chunker(chunks):
     """ Used during input streaming to chunk text blocks and set last char to space """
     splitters = (".", ",", "?", "!", ";", ":", "—", "-", "(", ")", "[", "]", "}", " ")
     buffer = ""
-    for text in chunks:
+    for text in chunks():
         if buffer.endswith(splitters):
             yield buffer if buffer.endswith(" ") else buffer + " "
             buffer = text
@@ -79,15 +80,13 @@ class ElevenlabsIO:
                 continue
         self.playback_active = False
 
-    def process(self, voice_id, model_id, text_stream):
+    def process(self, voice_id, model_id, text_stream, start_time):
         """ Stream text chunks via WebSocket to ElevenLabs and play received audio in real-time. """
         global stream_uri, extra_headers
         
         output_format = f"&output_format=mp3_{self.bit_rate}_{self.sample_rate}"
         
         uri = stream_uri.format(voice_id=voice_id, model_id=model_id, output_format=output_format)
-        
-        start_time = time.time()
         
         audio_stream_start, text_stream_start, connect_stream_start = 0, 0, 0
         

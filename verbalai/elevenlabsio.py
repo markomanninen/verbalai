@@ -33,7 +33,7 @@ def text_chunker(chunks):
     """ Used during input streaming to chunk text blocks and set last char to space """
     splitters = (".", ",", "?", "!", ";", ":", "—", "-", "(", ")", "[", "]", "}", " ")
     buffer = ""
-    for text in chunks:
+    for text in chunks():
         if buffer.endswith(splitters):
             yield buffer if buffer.endswith(" ") else buffer + " "
             buffer = text
@@ -87,7 +87,7 @@ class ElevenlabsIO:
                 continue
         self.playback_active = False
 
-    def process(self, voice_id, model_id, text_stream):
+    def process(self, voice_id, model_id, text_stream, start_time):
         """ Stream text chunks via WebSocket to ElevenLabs and play received audio in real-time. """
         global stream_uri, extra_headers
         
@@ -104,7 +104,6 @@ class ElevenlabsIO:
             self.playback_thread = Thread(target=self.playback_audio, daemon=True)
             self.playback_thread.start()
         
-        start_time = time.time()
         audio_stream_start, text_stream_start, connect_stream_start = 0, 0, 0
         
         with connect(uri, additional_headers=extra_headers) as ws:
