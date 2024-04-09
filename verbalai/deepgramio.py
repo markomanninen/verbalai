@@ -1,6 +1,7 @@
 # deepgramio.py - A Python module for streaming audio to text using Deepgram API.
 # Native Python library imports
 import os
+import re
 import time
 from threading import Thread
 from queue import Queue, Empty
@@ -22,15 +23,18 @@ logger = logging.getLogger(__name__)
 
 deepgram = DeepgramClient(os.getenv("DEEPGRAM_API_KEY"))
 
+# DeepgramIO class
 class DeepgramIO:
-    
-    def __init__(self):
+    """ A class for streaming audio to text using Deepgram API. """
+    def __init__(self, remove_asterisks = True):
+        """ Initialize the DeepgramIO class. """
         self.buffer = bytearray()
         # Start the playback thread
         self.audio_queue = Queue()
         self.playback_thread = Thread(target=self.playback_audio, daemon=True)
         self.playback_active = False
         self.playback_thread.start()
+        self.remove_asterisks = remove_asterisks
     
     def playback_audio(self):
         """ Continuously play audio chunks from the queue. """
@@ -47,6 +51,11 @@ class DeepgramIO:
                     self.buffer.extend(audio_chunk.read())
                     audio_chunk.seek(0)
                     play(AudioSegment.from_mp3(audio_chunk))
+                else:
+                    # Empty audio chunk received, exit the loop.
+                    # This should not happen too often.
+                    print("Empty audio chunk received. Exit the loop")
+                    break
             except Empty:
                 continue
         self.playback_active = False
@@ -54,9 +63,17 @@ class DeepgramIO:
     def process(self, voice_id = "aura-asteria-en", model_id = "", text_stream = None, start_time = 0):
         """ Process the text stream and synthesize audio. """
         
+        # Start the playback thread if it's not running
+        # This ensures that the audio is played also from the second time and onwards
+        if not self.playback_thread.is_alive():
+            self.playback_active = False
+            self.playback_thread = Thread(target=self.playback_audio, daemon=True)
+            self.playback_thread.start()
+        
         self.audio_stream_start, text_stream_start, connect_stream_start = 0, 0, 0
         
         def synthesize_audio(text):
+            """ Synthesize audio from text. """
             nonlocal connect_stream_start
             if connect_stream_start == 0:
                 connect_stream_start = time.time()
@@ -72,14 +89,14 @@ class DeepgramIO:
             if not text_stream_start:
                 text_stream_start = time.time()
             if "." == segment_text or "!" == segment_text or "?" == segment_text:
-                synthesize_audio(segment + segment_text)
+                synthesize_audio(re.sub(r'\*.*?\*', '', segment + segment_text) if self.remove_asterisks else (segment + segment_text))
                 segment = ""
             else:
                 segment += segment_text
         
         # Synthesize the rest of the segment
         if segment:
-            synthesize_audio(segment)
+            synthesize_audio(re.sub(r'\*.*?\*', '', segment) if self.remove_asterisks else segment)
         
         self.audio_queue.put("END OF STREAM")
         
@@ -96,6 +113,7 @@ class DeepgramIO:
         # Wait for the playback thread to finish
         while self.playback_active:
             time.sleep(0.1)
+        self.buffer = bytearray()
         self.playback_thread.join(timeout=1)
     
     def quit(self):
