@@ -1,6 +1,12 @@
 # auto archive dir
 archive/
 
+# Vector database
+*.ann
+
+# SQLite database
+*.sqlite
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
