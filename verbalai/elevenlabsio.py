@@ -7,6 +7,7 @@ from wave import open as open_wav
 from json import dumps, loads
 from os import environ
 from io import BytesIO
+import re
 import time
 from threading import Thread
 from queue import Queue, Empty
@@ -28,27 +29,10 @@ extra_headers = {
     'xi-api-key': environ.get('ELEVENLABS_API_KEY')
 }
 
-# Chunker for text streaming
-def text_chunker(chunks):
-    """ Used during input streaming to chunk text blocks and set last char to space """
-    splitters = (".", ",", "?", "!", ";", ":", "—", "-", "(", ")", "[", "]", "}", " ")
-    buffer = ""
-    for text in chunks():
-        if buffer.endswith(splitters):
-            yield buffer if buffer.endswith(" ") else buffer + " "
-            buffer = text
-        elif text.startswith(splitters):
-            output = buffer + text[0]
-            yield output if output.endswith(" ") else output + " "
-            buffer = text[1:]
-        else:
-            buffer += text
-    if buffer != "":
-        yield buffer + " "
-
-# ElevenLabs API WebSocket streaming class
+# ElevenLabs API WebSocket WAV streaming class
 class ElevenlabsIO:
-    def __init__(self, format=paInt16, channels=1, bit_rate=22050, frames_per_buffer=3200, audio_buffer_in_seconds=1):
+    """ A Python class for streaming text to speech using ElevenLabs API. """
+    def __init__(self, format=paInt16, channels=1, bit_rate=22050, frames_per_buffer=3200, audio_buffer_in_seconds=1, remove_asterisks = True):
         """ Initialize the ElevenlabsIO instance. """
         # Audio format parameters for wav output format
         self.format = format
@@ -66,6 +50,7 @@ class ElevenlabsIO:
         self.playback_thread = Thread(target=self.playback_audio, daemon=True)
         self.playback_active = False
         self.playback_thread.start()
+        self.remove_asterisks = remove_asterisks
     
     def playback_audio(self):
         """Continuously play audio chunks from the queue."""
@@ -75,7 +60,10 @@ class ElevenlabsIO:
                 if audio_chunk:
                     if audio_chunk == "END OF STREAM":
                         break
-                    self.playback_active = True
+                    if not self.playback_active:
+                        logger.info(f"Start playback")
+                        self.audio_stream_start = time.time()
+                        self.playback_active = True
                     self.buffer.extend(audio_chunk)
                     self.stream.write(audio_chunk)
                 else:
@@ -100,11 +88,11 @@ class ElevenlabsIO:
         # Start the playback thread if it's not running
         # This ensures that the audio is played also from the second time and onwards
         if not self.playback_thread.is_alive():
-            self.playback_active = True
+            self.playback_active = False
             self.playback_thread = Thread(target=self.playback_audio, daemon=True)
             self.playback_thread.start()
         
-        audio_stream_start, text_stream_start, connect_stream_start = 0, 0, 0
+        self.audio_stream_start, text_stream_start, connect_stream_start = 0, 0, 0
         
         with connect(uri, additional_headers=extra_headers) as ws:
             
@@ -135,9 +123,8 @@ class ElevenlabsIO:
             buffering = True
             
             def handle_audio_chunk(audio_chunk):
-                nonlocal audio_stream_start, audio_buffer, buffering, lasttime, totaltime
-                if not audio_stream_start:
-                    audio_stream_start = time.time()
+                """ Handle incoming audio chunks. """
+                nonlocal audio_buffer, buffering, lasttime, totaltime
                 if buffering:
                     # Accumulate audio data in the buffer
                     audio_buffer += audio_chunk
@@ -156,6 +143,7 @@ class ElevenlabsIO:
                 logger.debug(f"{round(timediff, 3)} Received audio chunk: {len(audio_chunk)} bytes.")
             
             def handle_response(response):
+                """ Handle incoming responses from ElevenLabs API. """
                 nonlocal audio_buffer
                 if 'audio' in response and response['audio']:
                     audio_chunk = b64decode(response['audio'])
@@ -172,15 +160,24 @@ class ElevenlabsIO:
                 else:
                     logger.warn(f"Elevenlabs unknown response: {response}")
             
-            # Stream text chunks
-            for chunk in text_chunker(text_stream):
+            segment = ""
+            # Stream text chunks to ElevenLabs API
+            for chunk in text_stream():
+                
                 if not text_stream_start:
                     text_stream_start = time.time()
-                # Send the text chunk to ElevenLabs API
-                ws.send(dumps({
-                    "text": chunk, 
-                    "try_trigger_generation": True
-                }))
+                
+                if "." == chunk or "!" == chunk or "?" == chunk:
+                    # Send the text chunk to ElevenLabs API
+                    ws.send(dumps({
+                        # Remove any asterisk action indicators from the segment
+                        "text": re.sub(r'\*.*?\*', '', segment + chunk) if self.remove_asterisks else (segment + chunk), 
+                        "try_trigger_generation": True
+                    }))
+                    segment = ""
+                else:
+                    segment += chunk
+
                 # Start receiving audio chunks already when the text is being sent
                 try:
                     # The recv method is used to receive the next message from the WebSocket. 
@@ -189,7 +186,16 @@ class ElevenlabsIO:
                     handle_response(loads(ws.recv(1e-4)))
                 except TimeoutError:
                     pass
-
+            
+            # Rest of the text stream if it was not ended with . or ! or ?
+            if segment:
+                ws.send(dumps({
+                    # Remove any asterisk action indicators from the segment
+                    "text": re.sub(r'\*.*?\*', '', segment) if self.remove_asterisks else segment, 
+                    "try_trigger_generation": True
+                }))
+                segment = ""
+            
             # Signal end of text and trigger any remaining audio generation
             ws.send(dumps({"text": ""}))
 
@@ -202,7 +208,7 @@ class ElevenlabsIO:
         
         logger.info(f"Connect stream start: {round(connect_stream_start - start_time, 6)} seconds.")
         logger.info(f"Text stream start: {round(text_stream_start - start_time, 6)} seconds.")
-        logger.info(f"Audio stream start: {round(audio_stream_start - start_time, 6)} seconds.")
+        logger.info(f"Audio stream start: {round(self.audio_stream_start - start_time, 6)} seconds.")
     
     def get_audio_bytes(self):
         """ Get the buffered audio data as bytes. """
