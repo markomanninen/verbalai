@@ -1,0 +1,93 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Find Dialogue Units Method Arguments",
+    "name": "find_dialogue_units",
+    "type": "object",
+    "description": "Arguments for the find_dialogue_units method in the VectorDB class. Note: Synonyms for dialogue unit are for instance: promt-response pair, conversation piece, chat fragment, discussion element, and interaction record.",
+    "properties": {
+      "phrase": {
+        "type": ["string", "null"],
+        "description": "The query phrase will be compared/matched against dialogue units for semantic similarity of prompt-response texts in the vector storage."
+      },
+      "limit": {
+        "type": "integer",
+        "description": "Maximum number of dialogue units to return. Can be 10 at most.",
+        "default": 3
+      },
+      "offset_page": {
+        "type": "integer",
+        "description": "Paging offset to paginate the results.",
+        "default": 0
+      },
+      "topic": {
+        "type": ["string", "null"],
+        "description": "Filter dialogue units with a specific topic using an exact match. Topic names must be specified as a single-word identifier in Titlecase (e.g., 'Topic1')."
+      },
+      "sentiment": {
+        "type": "object",
+        "description": "Filter dialogue units based on sentiment scores. Allows filtering by specifying conditions for positive, negative, and neutral scores. Use '> 0.5', '< 0.5', '= 0.5', '>= 0.5', '<= 0.5' to filter dialogue units by score conditions.",
+        "properties": {
+          "positive_score": {
+            "type": ["string", "null"],
+            "pattern": "^(>=|<=|>|<|=)\\s*\\d+(\\.\\d+)?$",
+            "description": "Condition for filtering dialogue units by score. Specify conditions using '>= X', '<= X', '> X', '< X', or '= X'."
+          },
+          "negative_score": {
+            "type": ["string", "null"],
+            "pattern": "^(>=|<=|>|<|=)\\s*\\d+(\\.\\d+)?$",
+            "description": "Condition for filtering dialogue units by score. Specify conditions using '>= X', '<= X', '> X', '< X', or '= X'."
+          }
+        },
+        "anyOf": [
+          {"required": ["positive_score"]},
+          {"required": ["negative_score"]}
+        ],
+        "additionalProperties": false
+      },
+      "intent": {
+        "type": ["string", "null"],
+        "description": "Filter dialogue units with a specific intent using an exact match. Intents are lowercase single-word identifiers."
+      },
+      "startime": {
+        "type": ["string", "null"],
+        "description": "Start of the timestamp range for filtering dialogue units.",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"
+      },
+      "endtime": {
+        "type": ["string", "null"],
+        "description": "End of the timestamp range for filtering dialogue units.",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"
+      },
+      "prompt": {
+        "type": ["string", "null"],
+        "description": "Filter dialogue units by a specific phrase from the user's prompt/input using a LIKE operator, which allows for partial matches."
+      },
+      "response": {
+        "type": ["string", "null"],
+        "description": "Filter dialogue units by a specific phrase from a response to the user's prompt using a LIKE operator, which allows for partial matches."
+      },
+      "order_by": {
+        "type": "string",
+        "description": "Order the results by a specific field.",
+        "enum": ["phrase", "timestamp", "topic", "intent", "prompt", "response"],
+        "default": "timestamp"
+      },
+      "order_direction": {
+        "type": "string",
+        "description": "Order direction for the results.",
+        "enum": ["ASC", "DESC"],
+        "default": "DESC"
+      }
+    },
+    "additionalProperties": false,
+    "anyOf": [
+      {"required": ["phrase"]},
+      {"required": ["topic"]},
+      {"required": ["sentiment"]},
+      {"required": ["intent"]},
+      {"required": ["starttime"]},
+      {"required": ["endtime"]},
+      {"required": ["prompt"]},
+      {"required": ["response"]}
+    ]
+  }

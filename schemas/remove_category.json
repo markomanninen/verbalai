@@ -1,0 +1,29 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Remove Category from Discussion",
+    "type": "object",
+    "description": "Schema for remove_category method arguments to remove a category from a discussion.",
+    "properties": {
+      "discussion_id": {
+        "type": "string",
+        "description": "The unique identifier of the discussion from which a category is being removed.",
+        "oneOf": [
+            {
+              "type": "string",
+              "enum": ["current", "latest", "previous", "last", "first", "earliest", "newest", "oldest", "active", "featured"]
+            },
+            {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          ]
+      },
+      "name": {
+        "type": "string",
+        "description": "The name of the category to remove."
+      }
+    },
+    "required": ["discussion_id", "name"],
+    "additionalProperties": false
+  }
+  

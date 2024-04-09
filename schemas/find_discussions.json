@@ -1,0 +1,76 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Find Discussions Method Arguments",
+    "type": "object",
+    "description": "Arguments for the find_discussions method, designed to query a database of conversations based on various criteria, including categories. Synonyms for conversation are session, discussion, and chat.",
+    "properties": {
+      "title": {
+        "type": ["string", "null"],
+        "description": "Title for filtering discussions using a LIKE operator, which allows for partial matches. Distinct from category name. Might be referenced to by name or title."
+      },
+      "featured": {
+        "type": ["boolean", "null"],
+        "description": "Featured flag for filtering discussions."
+      },
+      "starttime_start": {
+        "type": ["string", "null"],
+        "description": "Start of the start time range for filtering discussions, in ISO 8601 format.",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"
+      },
+      "endtime_start": {
+        "type": ["string", "null"],
+        "description": "End of the start time range for filtering discussions, in ISO 8601 format.",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"
+      },
+      "starttime_end": {
+        "type": ["string", "null"],
+        "description": "Start of the end time range for filtering discussions, in ISO 8601 format.",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"
+      },
+      "endtime_end": {
+        "type": ["string", "null"],
+        "description": "End of the end time range for filtering discussions, in ISO 8601 format.",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"
+      },
+      "category": {
+        "type": "object",
+        "description": "Filter discussions by a specific category, including its name and score. Might be referenced by category name or tag. Distinct from discussion title.",
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "The name of the category."
+          },
+          "score": {
+            "type": ["string", "null"],
+            "pattern": "^(>=|<=|>|<|=)\\s*\\d+(\\.\\d+)?$",
+            "description": "Condition for filtering discussions by category score."
+          }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      },
+      "limit": {
+        "type": "integer",
+        "description": "Maximum number of discussions to return. Can be 10 at most.",
+        "default": 3
+      },
+      "offset_page": {
+        "type": "integer",
+        "description": "Paging offset to paginate the results.",
+        "default": 0
+      },
+      "order_by": {
+        "type": "string",
+        "description": "Order the results by a specific field.",
+        "enum": ["title", "starttime", "endtime", "category", "featured"],
+        "default": "starttime"
+      },
+      "order_direction": {
+        "type": "string",
+        "description": "Order direction for the results.",
+        "enum": ["ASC", "DESC"],
+        "default": "ASC"
+      }
+    },
+    "additionalProperties": false
+}

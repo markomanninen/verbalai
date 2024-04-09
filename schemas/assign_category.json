@@ -1,0 +1,39 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Assign Category to Discussion",
+    "type": "object",
+    "description": "Schema for assign_category method arguments to assign a category to a discussion.",
+    "properties": {
+      "discussion_id": {
+        "description": "The unique identifier of the discussion to which a category is being assigned.",
+        "oneOf": [
+            {
+              "type": "string",
+              "enum": ["current", "latest", "previous", "last", "first", "earliest", "newest", "oldest", "active", "featured"]
+            },
+            {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          ]
+      },
+      "category": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name of the category."
+          },
+          "score": {
+            "type": "number",
+            "description": "The score or relevance of the category to the discussion. Must be between 0.0 and 1.0"
+          }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      }
+    },
+    "required": ["discussion_id", "category"],
+    "additionalProperties": false
+  }
+  
