@@ -322,6 +322,8 @@ class AudioRecorder:
         except KeyboardInterrupt:
             raise
 
+        print("############################################################")
+        print("# Listening ended.")
         #if self.toggle_listener and not self.pause:
             #save_audio_to_file(wav_audio, "input", "wav")
         
