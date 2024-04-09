@@ -1,0 +1,22 @@
+commands:
+
+  assign_category:
+  - "Please assign the category 'Technology' with a relevance of 0.95 to the latest discussion."
+  
+  modify_discussion:
+  - "Change the title of the latest discussion to 'Emerging Tech Trends' and set it as featured."
+
+  remove_category:
+  - "Remove the 'Technology' category from the latest discussion."
+
+  retrieve_dialogue_unit_by_id:
+  - "Can you find the dialogue unit with ID 1023 for review?"
+
+  retrieve_discussion_by_id:
+  - "Can you show me the details of the latest discussion?"
+
+  find_discussions:
+  - "Find discussions with titles containing 'global warming' that started after 2023-01-01T00:00:00."
+
+  find_dialogue_units:
+  - Hey, can you find me the top 5 dialogue units that mention "pizza toppings"? I'm curious what people have been chatting about related to that.
