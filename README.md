@@ -32,6 +32,13 @@ Make sure you have the latest setuptools installed:
 pip install --upgrade pip setuptools wheel
 ```
 
+Create Python environent:
+
+```
+python -m venv env
+source env/Scripts/activate
+```
+
 1. Clone the repository:
    ```
    git clone https://github.com/markomanninen/verbalai.git
@@ -58,8 +65,10 @@ pip install --upgrade pip setuptools wheel
      ```
      ELEVEN_API_KEY=your_elevenlabs_api_key
      ANTHROPIC_API_KEY=your_anthropic_api_key
+     DEEPGRAM_API_KEY=your_deepgram_api_key
+     OPENAI_API_KEY=your_openai_api_key
      ```
-   - Replace `your_elevenlabs_api_key` and `your_anthropic_api_key` with your actual API keys retrieved from the respective service providers.
+   - Replace `*****_api_key` with your actual API keys retrieved from the respective service providers.
 
 5. Install the project:
    ```
@@ -96,7 +105,7 @@ Some notable options include:
 - `-v, --voice_id`: Set the Elevenlabs voice ID (default: 29vD33N1CtxCmqQRPOHJ / Drew)
 - `-m, --gpt_model`: Set the Anthropic Claude GPT language model (default: claude-3-haiku-20240307)
 - `-u, --username`: Set the chat username (default: VerbalHuman)
-- `-fs, --file_source`: Instead of microphone input, give a file or URL for inference (default: )
+- `-fs, --file_source`: Instead of microphone input, give a file or URL for inference (default: '')
 
 For more information on the available options, refer to the `verbalai --help` command.
 
@@ -112,18 +121,34 @@ Contributions are welcome! If you find any issues or have suggestions for improv
 
 **Note:** The package may not run smoothly in a WSL (Windows Subsystem for Linux) environment due to conflicts between the audio drivers of Linux and Windows.
 
+## Command Model Usage
+
+The `test/test_commands.py` script is designed for training and testing the commands module.
+
+The script supports both training and testing modes through command-line arguments. Here's how to use it:
+
+```bash
+python test/test_commands.py [--train] [--low_confidence_threshold FLOAT] [--model_path PATH] [--train_file FILE] [--test_file FILE]
+```
+
+Default train and test files are in `data` directory.
+
 ## Acknowledgements
 
 - [Anthropic](https://www.anthropic.com/) for providing the Claude GPT language models
+- [OpenAI](https://www.openai.com/) for providing the OpenAI GPT 3.5/4 language models
 - [Elevenlabs](https://www.elevenlabs.io/) for the text-to-speech API
+- [Deepgram](https://www.deepgram.com/) for the text-to-speech and speech-to-text API
 - [Google Speech Recognition](https://pypi.org/project/SpeechRecognition/) for the voice-to-text recognition functionality
 
 ## Similar projects
 
 - https://github.com/gbaptista/ion
 - https://github.com/KoljaB/AIVoiceChat
+- https://github.com/KoljaB/RealtimeTTS
 - https://github.com/lspahija/AIUI
 - https://github.com/alesaccoia/VoiceStreamAI
 - https://github.com/gkamradt/QuickAgent/
 - https://github.com/ccappetta/bidirectional_streaming_ai_voice
 - https://medium.com/@sujanxchhetri/creating-a-chatbot-using-socket-io-api-ai-and-web-speech-api-844c3177596b
+- https://vapi.ai/

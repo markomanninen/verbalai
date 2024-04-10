@@ -17,7 +17,14 @@ setup(
         'deepgram-sdk',
         'openai',
         'flask',
-        'werkzeug'
+        'werkzeug',
+        'annoy',
+        'numpy',
+        'transformers',
+        'torch',
+        'termcolor',
+        'pyyaml',
+        'scikit-learn'
     ],
     extras_require={
         'mp3': [
