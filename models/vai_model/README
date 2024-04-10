@@ -1,0 +1,2 @@
+Placeholder directory for vai_model. If directory contains no model files,
+run test/test_commands.py --train to train a new model.
