@@ -2,7 +2,8 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "Assign Category to Discussion",
     "type": "object",
-    "description": "Schema for assign_category method arguments to assign a category to a discussion.",
+    "name": "assign_category",
+    "description": "Arguments to assign a category to a discussion.",
     "properties": {
       "discussion_id": {
         "description": "The unique identifier of the discussion to which a category is being assigned.",
@@ -12,8 +13,7 @@
               "enum": ["current", "latest", "previous", "last", "first", "earliest", "newest", "oldest", "active", "featured"]
             },
             {
-              "type": "string",
-              "pattern": "^[a-zA-Z0-9_-]+$"
+              "type": "integer"
             }
           ]
       },

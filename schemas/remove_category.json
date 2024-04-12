@@ -1,8 +1,9 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "Remove Category from Discussion",
+    "name": "remove_category",
     "type": "object",
-    "description": "Schema for remove_category method arguments to remove a category from a discussion.",
+    "description": "Arguments designed to remove a category from a discussion.",
     "properties": {
       "discussion_id": {
         "type": "string",
@@ -13,8 +14,7 @@
               "enum": ["current", "latest", "previous", "last", "first", "earliest", "newest", "oldest", "active", "featured"]
             },
             {
-              "type": "string",
-              "pattern": "^[a-zA-Z0-9_-]+$"
+              "type": "integer"
             }
           ]
       },

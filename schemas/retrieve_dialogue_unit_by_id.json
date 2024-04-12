@@ -1,11 +1,12 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Retrieve Dialogue Unit By ID Method Arguments",
+  "title": "Retrieve Dialogue Unit by ID Method Arguments",
+  "name": "retrieve_dialogue_unit_by_id",
   "type": "object",
-  "description": "Arguments for the retrieve_dialogue_unit_by_id method, designed to query a database of conversation prompt-response entries using a specific dialogue unit entry ID. Entries are topical prompt-response pairs assigned to discussion sessions. Note: Synonyms for dialogue unit are for instance: promt-response pair, conversation piece, chat fragment, discussion element, and interaction record.",
+  "description": "Arguments to query a database of conversation prompt-response entries using a specific dialogue unit entry ID. Entries are topical prompt-response pairs assigned to discussion sessions. Synonyms for dialogue unit are for instance prompt-response pair, conversation piece, chat fragment, discussion element, and interaction record.",
   "properties": {
     "dialogue_unit_id": {
-      "type": ["integer"],
+      "type": "integer",
       "description": "The unique identifier of the dialogue unit to be retrieved."
     }
   },

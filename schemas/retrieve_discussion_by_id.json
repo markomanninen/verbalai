@@ -1,8 +1,9 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "title": "Retrieve Discussion By ID Method Arguments",
+    "title": "Retrieve Discussion by ID Method Arguments",
+    "name": "retrieve_discussion_by_id",
     "type": "object",
-    "description": "Arguments for the retrieve_discussion_by_id method, designed to query a database of conversations using a specific discussion ID. Synonyms for conversation are for instance: session, discussion, and chat.",
+    "description": "Arguments to query a database of conversations using a specific discussion ID. Synonyms for conversation are for instance: session, discussion, and chat.",
     "properties": {
       "discussion_id": {
         "description": "The unique identifier of the discussion to be retrieved. Special strings like current, latest, previous, last, and first are interpreted internally.",
@@ -12,8 +13,7 @@
             "enum": ["current", "latest", "previous", "last", "first", "earliest", "newest", "oldest", "random", "active", "featured"]
           },
           {
-            "type": "string",
-            "pattern": "^[a-zA-Z0-9_-]+$"
+            "type": "integer"
           }
         ]
       }

@@ -3,7 +3,7 @@
     "title": "Find Dialogue Units Method Arguments",
     "name": "find_dialogue_units",
     "type": "object",
-    "description": "Arguments for the find_dialogue_units method in the VectorDB class. Note: Synonyms for dialogue unit are for instance: promt-response pair, conversation piece, chat fragment, discussion element, and interaction record.",
+    "description": "Arguments to query a database of dialogue units based on various criteria, including phrase, topic, sentiment, intent, starttime, endtime, prompt, and response. Note: Synonyms for dialogue unit are for instance prompt-response pair, conversation piece, chat fragment, discussion element, and interaction record. Dialogue units are distinct from discussion session entries. In a tool chain find_dialogue_units usually followed by a retrieve_dialogue_unit_by_id tool.",
     "properties": {
       "phrase": {
         "type": ["string", "null"],
@@ -50,13 +50,11 @@
       },
       "startime": {
         "type": ["string", "null"],
-        "description": "Start of the timestamp range for filtering dialogue units.",
-        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"
+        "description": "Start of the timestamp range for filtering dialogue units, in ISO 8601 format."
       },
       "endtime": {
         "type": ["string", "null"],
-        "description": "End of the timestamp range for filtering dialogue units.",
-        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"
+        "description": "End of the timestamp range for filtering dialogue units, in ISO 8601 format."
       },
       "prompt": {
         "type": ["string", "null"],

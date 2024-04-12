@@ -1,8 +1,9 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "Find Discussions Method Arguments",
+    "name": "find_discussions",
     "type": "object",
-    "description": "Arguments for the find_discussions method, designed to query a database of conversations based on various criteria, including categories. Synonyms for conversation are session, discussion, and chat.",
+    "description": "Arguments to query a database of discussions based on various criteria, including title, featured, startime, endtime, and category. Synonyms for discussion are for instance session, conversation, and chat. Discussion entries are distinct from dialogue unit entries. In a tool chain find_discussions usually folowed by a retrieve_discussion_by_id tool, which is followed by a find_dialogue_units tool, and finally retrieve_dialogue_unit_by_id tool.",
     "properties": {
       "title": {
         "type": ["string", "null"],
@@ -14,23 +15,19 @@
       },
       "starttime_start": {
         "type": ["string", "null"],
-        "description": "Start of the start time range for filtering discussions, in ISO 8601 format.",
-        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"
+        "description": "Start of the start time range for filtering discussions, in ISO 8601 format."
       },
       "endtime_start": {
         "type": ["string", "null"],
-        "description": "End of the start time range for filtering discussions, in ISO 8601 format.",
-        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"
+        "description": "End of the start time range for filtering discussions, in ISO 8601 format."
       },
       "starttime_end": {
         "type": ["string", "null"],
-        "description": "Start of the end time range for filtering discussions, in ISO 8601 format.",
-        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"
+        "description": "Start of the end time range for filtering discussions, in ISO 8601 format."
       },
       "endtime_end": {
         "type": ["string", "null"],
-        "description": "End of the end time range for filtering discussions, in ISO 8601 format.",
-        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"
+        "description": "End of the end time range for filtering discussions, in ISO 8601 format."
       },
       "category": {
         "type": "object",
@@ -43,7 +40,7 @@
           "score": {
             "type": ["string", "null"],
             "pattern": "^(>=|<=|>|<|=)\\s*\\d+(\\.\\d+)?$",
-            "description": "Condition for filtering discussions by category score."
+            "description": "Condition for filtering discussions by category score. Specify conditions using '>= X', '<= X', '> X', '< X', or '= X'."
           }
         },
         "required": ["name"],
@@ -72,5 +69,14 @@
         "default": "ASC"
       }
     },
+    "anyOf": [
+      {"required": ["title"]},
+      {"required": ["featured"]},
+      {"required": ["starttime_start"]},
+      {"required": ["endtime_start"]},
+      {"required": ["starttime_end"]},
+      {"required": ["endtime_end"]},
+      {"required": ["category"]}
+    ],
     "additionalProperties": false
 }
