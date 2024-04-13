@@ -100,6 +100,8 @@ def audio_processing_worker(input_queue, language, text_queue):
             text = recognizer.recognize_google(audio_data, language=language)
             if text:
                 text_queue.put(text)
+        except KeyboardInterrupt:
+            break
         except UnknownValueError:
             # Google Speech Recognition could not understand the audio
             print('?', end='\r')
