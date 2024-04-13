@@ -1,0 +1,119 @@
+[
+  {
+    "prompt": "Please search for discussions titled 'Artificial Intelligence' that began after 2023-01-01.",
+    "args": {
+      "title": "Artificial Intelligence",
+      "starttime_start": "2023-01-02"
+    }
+  },
+  {
+    "prompt": "Can you find any featured discussions that started between January and March 2023?",
+    "args": {
+      "featured": true,
+      "starttime_start": "2023-01-01",
+      "endtime_start": "2023-03-31"
+    }
+  },
+  {
+    "prompt": "Show me discussions with the category 'Tech' that have a score greater than 0.7.",
+    "args": { "category": { "name": "Tech", "score": "> 0.7" } }
+  },
+  {
+    "prompt": "I need to locate discussions starting from yesterday that discuss 'Global Warming'.",
+    "args": { "title": "Global Warming", "starttime_start": "2023-04-10" }
+  },
+  {
+    "prompt": "Find all discussions related to 'Economics' that ended before 2024-04-01.",
+    "args": { "title": "Economics", "endtime_end": "2024-03-31" }
+  },
+  {
+    "prompt": "Look for discussions tagged as important from the last week.",
+    "args": {
+      "category": { "name": "important" },
+      "starttime_start": "2023-04-04"
+    }
+  },
+  {
+    "prompt": "Search for discussions under the 'Healthcare' category with high relevance.",
+    "args": { "category": { "name": "Healthcare", "score": ">= 0.8" } }
+  },
+  {
+    "prompt": "Retrieve list of discussions on 'Quantum Computing' started last year and featured.",
+    "args": {
+      "title": "Quantum Computing",
+      "starttime_start": "2023-01-01",
+      "featured": true
+    }
+  },
+  {
+    "prompt": "Could you identify discussions that focus on 'Education' starting from 2024?",
+    "args": { "title": "Education", "starttime_start": "2024-01-01" }
+  },
+  {
+    "prompt": "Please provide discussions related to 'Blockchain' technology that started this month.",
+    "args": { "title": "Blockchain", "starttime_start": "2023-04-01" }
+  },
+  {
+    "prompt": "Fetch discussions that involve 'Climate Change' from the past six months.",
+    "args": { "title": "Climate Change", "starttime_start": "2022-10-11" }
+  },
+  {
+    "prompt": "Locate discussions around 'Artificial Intelligence' that have been highly rated.",
+    "args": {
+      "title": "Artificial Intelligence",
+      "category": { "score": ">= 0.9" }
+    }
+  },
+  {
+    "prompt": "Search discussions under 'Sports' category that were featured in the last 30 days.",
+    "args": {
+      "category": { "name": "Sports" },
+      "featured": true,
+      "starttime_start": "2023-03-12"
+    }
+  },
+  {
+    "prompt": "Can you show me discussions about 'Philosophy' that occurred last December?",
+    "args": {
+      "title": "Philosophy",
+      "starttime_start": "2022-12-01",
+      "endtime_end": "2022-12-31"
+    }
+  },
+  {
+    "prompt": "I'm interested in discussions tagged with 'Literature' from early 2023.",
+    "args": {
+      "category": { "name": "Literature" },
+      "starttime_start": "2023-01-01",
+      "endtime_end": "2023-02-28"
+    }
+  },
+  {
+    "prompt": "Find discussions with the 'Science' tag and sort them by start time, earliest first.",
+    "args": {
+      "category": { "name": "Science" },
+      "order_by": "starttime",
+      "order_direction": "ASC"
+    }
+  },
+  {
+    "prompt": "Identify any discussions from the previous year under the category 'Mathematics'.",
+    "args": {
+      "category": { "name": "Mathematics" },
+      "starttime_start": "2022-01-01",
+      "endtime_end": "2022-12-31"
+    }
+  },
+  {
+    "prompt": "Query for discussions labeled 'Astronomy' with a category score equal to 0.8.",
+    "args": { "category": { "name": "Astronomy", "score": "= 0.8" } }
+  },
+  {
+    "prompt": "Please look up discussions on 'Psychology' that have started since the beginning of this year.",
+    "args": { "title": "Psychology", "starttime_start": "2023-01-01" }
+  },
+  {
+    "prompt": "Retrieve discussions about 'Biotechnology' with start times before 2023-12-31.",
+    "args": { "title": "Biotechnology", "endtime_end": "2023-12-31" }
+  }
+]

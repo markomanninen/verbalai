@@ -1,0 +1,43 @@
+[
+  {
+    "prompt": "Please assign the 'Tech Innovations' category, with a relevance score of 0.75, to our latest discussion.",
+    "args": {
+      "discussion_id": "latest",
+      "category": {
+        "name": "Tech Innovations",
+        "score": 0.75
+      }
+    }
+  },
+  {
+    "prompt": "Designate the 'Creative Writing' category to our first discussion, rating its relevance at 0.8.",
+    "args": {
+      "discussion_id": "first",
+      "category": {
+        "name": "Creative Writing",
+        "score": 0.8
+      }
+    }
+  },
+  {
+    "prompt": "For the discussion identified as number four, assign the category 'Machine Learning' with a score of 0.9.",
+    "args": {
+      "discussion_id": 4,
+      "category": {
+        "name": "Machine Learning",
+        "score": 0.9
+      }
+    }
+  },
+  {
+    "prompt": "Assign to the discussion we labeled as '3' the category 'Renewable Energy' with a relevance score of 0.87.",
+    "args": {
+      "discussion_id": 3,
+      "category": {
+        "name": "Renewable Energy",
+        "score": 0.87
+      }
+    },
+    "comment": "Label could also refer to discussion title, but it is ambigious because there can be multiple discussions with the same title."
+  }
+]

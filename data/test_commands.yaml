@@ -2,18 +2,18 @@ commands:
 
   assign_category:
   - "Please assign the category 'Technology' with a relevance of 0.95 to the latest discussion."
-  - "Kindly update the newest forum thread, labeling it under 'Health and Wellness' with a relevance score of 0.90."
-  - "Mark the current article's category as 'Science Fiction' with a relevance factor of 0.93, please."
+  - "Kindly update the newest conversation thread, labeling it under 'Health and Wellness' with a relevance score of 0.90."
+  - "Mark the current chats's category as 'Science Fiction' with a relevance factor of 0.93, please."
   
   modify_discussion:
   - "Change the title of the latest discussion to 'Emerging Tech Trends' and set it as featured."
   - "Please adjust the name of the ongoing thread to 'Future of Renewable Energy' and highlight it in the forum."
-  - "Edit the subject of the thread titled 'Space Exploration' to 'Mars Colonization: Prospects and Challenges' and pin it to the top."
+  - "Edit the subject of the first thread titled 'Space Exploration' to 'Mars Colonization: Prospects and Challenges' and pin it to the top."
 
   remove_category:
   - "Remove the 'Technology' category from the latest discussion."
-  - "Strip the 'Sports' label from the discussion titled '2024 Olympic Preparations'."
-  - "Eliminate the 'Artificial Intelligence' category from the thread discussing AI ethics."
+  - "Strip the 'Sports' label from the discussion that took first."
+  - "Eliminate the 'Artificial Intelligence' category from the thread id 353."
 
   retrieve_dialogue_unit_by_id:
   - "Can you find the dialogue unit with ID 1023 for review?"
@@ -22,7 +22,7 @@ commands:
 
   retrieve_discussion_by_id:
   - "Can you show me the details of the latest discussion?"
-  - "Display the full contents and participant list of the discussion identified by ID 540."
+  - "Display the contents of the discussion identified by ID 540."
   - "I'm looking for the specifics of the discussion with ID 1125; can you pull up the information?"
 
   find_discussions:
@@ -32,5 +32,5 @@ commands:
 
   find_dialogue_units:
   - Hey, can you find me the top 5 dialogue units that mention "pizza toppings"? I'm curious what people have been chatting about related to that.
-  - "Could you look up the most recent discussions that include debates on 'best coding practices'? I need the top 3 for reference."
+  - "Could you look up the most recent dialogues that include debates on 'best coding practices'? I need the top 3 for reference."
   - "I'm interested in seeing the latest opinions on 'sustainable travel options'. Find the dialogue units that tackle this topic, please."

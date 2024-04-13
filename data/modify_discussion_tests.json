@@ -1,0 +1,159 @@
+[
+  {
+    "prompt": "Update discussion ID '1234' with the new title 'Tomorrow's Technology'.",
+    "args": {
+      "discussion_id": 1234,
+      "title": "Tomorrow's Technology"
+    }
+  },
+  {
+    "prompt": "Change the title to 'Future Visions' and set as featured for discussion number '5678'.",
+    "args": {
+      "discussion_id": 5678,
+      "title": "Future Visions",
+      "featured": true
+    }
+  },
+  {
+    "prompt": "Can you rename discussion '2345' to 'New Horizons' and also mark it as not featured?",
+    "args": {
+      "discussion_id": 2345,
+      "title": "New Horizons",
+      "featured": false
+    }
+  },
+  {
+    "prompt": "Modify the discussion with ID '3456' to have the title 'Tech Talks' and make sure it is highlighted as featured.",
+    "args": {
+      "discussion_id": 3456,
+      "title": "Tech Talks",
+      "featured": true
+    }
+  },
+  {
+    "prompt": "I need the title of discussion '4567' updated to 'Innovation Hub'.",
+    "args": {
+      "discussion_id": 4567,
+      "title": "Innovation Hub"
+    }
+  },
+  {
+    "prompt": "For discussion '7890', change the title to 'Artificial Intelligence Today' and make it featured.",
+    "args": {
+      "discussion_id": 7890,
+      "title": "Artificial Intelligence Today",
+      "featured": true
+    }
+  },
+  {
+    "prompt": "Set the discussion ID '8901' title to 'Smart Cities' and do not feature it.",
+    "args": {
+      "discussion_id": 8901,
+      "title": "Smart Cities",
+      "featured": false
+    }
+  },
+  {
+    "prompt": "Please modify the title of discussion '9012' to 'Sustainability and Tech' and feature it.",
+    "args": {
+      "discussion_id": 9012,
+      "title": "Sustainability and Tech",
+      "featured": true
+    }
+  },
+  {
+    "prompt": "Adjust the discussion titled 'Tech Debate' with ID '1122' to be featured.",
+    "args": {
+      "discussion_id": 1122,
+      "featured": true
+    }
+  },
+  {
+    "prompt": "Rename discussion '2233' to 'Digital Frontiers' and ensure it's not featured.",
+    "args": {
+      "discussion_id": 2233,
+      "title": "Digital Frontiers",
+      "featured": false
+    }
+  },
+  {
+    "prompt": "Could you update the discussion '3344' title to 'Tech Trends 2024' and feature it?",
+    "args": {
+      "discussion_id": 3344,
+      "title": "Tech Trends 2024",
+      "featured": true
+    }
+  },
+  {
+    "prompt": "I'd like to modify discussion '4455', setting the title to 'Robotics Revolution' and not featuring it.",
+    "args": {
+      "discussion_id": 4455,
+      "title": "Robotics Revolution",
+      "featured": false
+    }
+  },
+  {
+    "prompt": "Update the title of the current discussion to 'Quantum Computing: An Overview'.",
+    "args": {
+      "discussion_id": "current",
+      "title": "Quantum Computing: An Overview"
+    }
+  },
+  {
+    "prompt": "Alter the discussion ID '5566' to 'Blockchain Basics' and mark it as featured.",
+    "args": {
+      "discussion_id": 5566,
+      "title": "Blockchain Basics",
+      "featured": true
+    }
+  },
+  {
+    "prompt": "Change the title for discussion '6677' to 'Next Gen AI' without marking it as featured.",
+    "args": {
+      "discussion_id": 6677,
+      "title": "Next Gen AI",
+      "featured": false
+    }
+  },
+  {
+    "prompt": "Can you set the current discussion's title to 'Cybersecurity Challenges' and feature it?",
+    "args": {
+      "discussion_id": "current",
+      "title": "Cybersecurity Challenges",
+      "featured": true
+    }
+  },
+  {
+    "prompt": "I want to update discussion '7788' with a new title 'Cloud Computing Conclave' and also feature it.",
+    "args": {
+      "discussion_id": 7788,
+      "title": "Cloud Computing Conclave",
+      "featured": true
+    }
+  },
+  {
+    "prompt": "Please change the discussion title to 'Data Science Deep Dive' for ID 8899 and do not feature it.",
+    "args": {
+      "discussion_id": 8899,
+      "title": "Data Science Deep Dive",
+      "featured": false
+    }
+  },
+  {
+    "prompt": "Modify the discussion nine thousand nine hundred by renaming it to 'The Internet of Things' and ensuring it's featured.",
+    "args": {
+      "discussion_id": 9900,
+      "title": "The Internet of Things",
+      "featured": true
+    },
+    "comment": "The discussion ID 'nine thousand nine hundred' should map to 9900."
+  },
+  {
+    "prompt": "Change the title of the last discussion to 'Virtual Reality in Healthcare' and leave it unfeatured.",
+    "args": {
+      "discussion_id": "last",
+      "title": "Virtual Reality in Healthcare",
+      "featured": false
+    }
+  }
+]

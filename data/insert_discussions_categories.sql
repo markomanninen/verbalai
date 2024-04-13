@@ -1,12 +1,12 @@
 -- SQL Inserts for Discussions
 BEGIN TRANSACTION;
 
-INSERT INTO discussions (id, title, starttime, endtime, featured) VALUES
-('1', 'Technology Advances in 2023', '2023-04-01 09:00:00', '2023-04-01 10:00:00', 1),
-('2', 'Sustainability and Green Energy', '2023-04-10 11:00:00', '2023-04-10 12:00:00', 0),
-('3', 'Exploring the Depths of Space in the 21st Century', '2023-04-15 15:00:00', '2023-04-15 16:00:00', 1),
-('4', 'The Future of AI and Machine Learning', '2023-04-20 14:00:00', '2023-04-20 15:30:00', 0),
-('5', 'Advancements in Renewable Energy', '2023-04-25 09:00:00', '2023-04-25 10:00:00', 1);
+INSERT INTO discussions (id, session_id, title, starttime, endtime, featured) VALUES
+('1', '1', 'Technology Advances in 2023', '2023-04-01 09:00:00', '2023-04-01 10:00:00', 1),
+('2', '2', 'Sustainability and Green Energy', '2023-04-10 11:00:00', '2023-04-10 12:00:00', 0),
+('3', '3', 'Exploring the Depths of Space in the 21st Century', '2023-04-15 15:00:00', '2023-04-15 16:00:00', 1),
+('4', '4', 'The Future of AI and Machine Learning', '2023-04-20 14:00:00', '2023-04-20 15:30:00', 0),
+('5', '5', 'Advancements in Renewable Energy', '2023-04-25 09:00:00', '2023-04-25 10:00:00', 1);
 
 -- SQL Inserts for Categories Linked to Discussions
 INSERT INTO categories (name, score, discussion_id) VALUES

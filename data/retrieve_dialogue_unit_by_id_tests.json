@@ -1,0 +1,122 @@
+[
+  {
+    "prompt": "Please retrieve the details for dialogue unit ID 45.",
+    "args": {
+      "dialogue_unit_id": 45
+    }
+  },
+  {
+    "prompt": "Can you show me the entry for dialogue unit 102?",
+    "args": {
+      "dialogue_unit_id": 102
+    }
+  },
+  {
+    "prompt": "Pull up the record for dialogue unit 15, please.",
+    "args": {
+      "dialogue_unit_id": 15
+    }
+  },
+  {
+    "prompt": "I need information on dialogue unit ID 67.",
+    "args": {
+      "dialogue_unit_id": 67
+    }
+  },
+  {
+    "prompt": "What can you tell me about dialogue unit 21?",
+    "args": {
+      "dialogue_unit_id": 21
+    }
+  },
+  {
+    "prompt": "Fetch the details associated with dialogue unit ID 34.",
+    "args": {
+      "dialogue_unit_id": 34
+    }
+  },
+  {
+    "prompt": "Show dialogue unit 89.",
+    "args": {
+      "dialogue_unit_id": 89
+    }
+  },
+  {
+    "prompt": "Could you get the data for dialogue unit ID 56?",
+    "args": {
+      "dialogue_unit_id": 56
+    }
+  },
+  {
+    "prompt": "Access the record for dialogue unit 75.",
+    "args": {
+      "dialogue_unit_id": 75
+    }
+  },
+  {
+    "prompt": "Display the entry corresponding to dialogue unit ID 2.",
+    "args": {
+      "dialogue_unit_id": 2
+    }
+  },
+  {
+    "prompt": "Load the conversation piece identified by unit ID 98.",
+    "args": {
+      "dialogue_unit_id": 98
+    }
+  },
+  {
+    "prompt": "What does dialogue unit 103 contain?",
+    "args": {
+      "dialogue_unit_id": 103
+    }
+  },
+  {
+    "prompt": "Retrieve and show details of dialogue unit ID 47.",
+    "args": {
+      "dialogue_unit_id": 47
+    }
+  },
+  {
+    "prompt": "Get info on dialogue unit 81.",
+    "args": {
+      "dialogue_unit_id": 81
+    }
+  },
+  {
+    "prompt": "Bring up the content for dialogue unit ID 29.",
+    "args": {
+      "dialogue_unit_id": 29
+    }
+  },
+  {
+    "prompt": "Give me the details for dialogue unit 59.",
+    "args": {
+      "dialogue_unit_id": 59
+    }
+  },
+  {
+    "prompt": "Query the database for dialogue unit ID 12.",
+    "args": {
+      "dialogue_unit_id": 12
+    }
+  },
+  {
+    "prompt": "I'd like to see the information for dialogue unit 33.",
+    "args": {
+      "dialogue_unit_id": 33
+    }
+  },
+  {
+    "prompt": "Can you find the conversation entry for dialogue unit ID 88?",
+    "args": {
+      "dialogue_unit_id": 88
+    }
+  },
+  {
+    "prompt": "Extract the response for dialogue unit 66.",
+    "args": {
+      "dialogue_unit_id": 66
+    }
+  }
+]

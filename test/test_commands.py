@@ -1,5 +1,6 @@
 # test_commands.py - A module to train and test the commands module
 import argparse
+import os
 # Library imports
 from verbalai.commands import train_data, test_commands
 # Import log lonfig as a side effect only
@@ -15,11 +16,15 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Train and test the commands module")
     parser.add_argument("--train", action="store_true", help="Train the data")
-    parser.add_argument("--low_confidence_threshold", type=float, default=0.70, help="Threshold for low confidence")
-    parser.add_argument("--model_path", type=str, default="model", help="Path to the model")
+    parser.add_argument("--low_confidence_threshold", type=float, default=0.80, help="Threshold for low confidence")
+    parser.add_argument("--model_path", type=str, default="models/vai_model", help="Path to the model")
     parser.add_argument("--train_file", type=str, default="data/train_commands.yaml", help="Path to the train file")
     parser.add_argument("--test_file", type=str, default="data/test_commands.yaml", help="Path to the test file")
     args = parser.parse_args()
+    
+    # Find if the directory does not exists in the given path and create it
+    if not os.path.exists(args.model_path):
+        os.makedirs(args.model_path)
     
     if args.train:
         # Train the data

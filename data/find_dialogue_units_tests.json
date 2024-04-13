@@ -1,0 +1,93 @@
+[
+  {
+    "prompt": "Please find dialogue units containing the phrase 'climate change'.",
+    "args": { "phrase": "climate change" }
+  },
+  {
+    "prompt": "Search for dialogue units where the topic is 'Healthcare'.",
+    "args": { "topic": "Healthcare" }
+  },
+  {
+    "prompt": "Can you show me dialogue units with a positive sentiment score greater than 0.8?",
+    "args": { "sentiment": { "positive_score": "> 0.8" } }
+  },
+  {
+    "prompt": "I need to retrieve dialogue units that responded to prompts about 'Artificial Intelligence' starting from January 2020.",
+    "args": {
+      "prompt": "Artificial Intelligence",
+      "startime": "2020-01-01T00:00:00"
+    }
+  },
+  {
+    "prompt": "Fetch dialogue units with responses relating to 'global warming' from last month.",
+    "args": { "response": "global warming" }
+  },
+  {
+    "prompt": "Display dialogue units with the intent 'question' ordered by response time in descending order.",
+    "args": {
+      "intent": "question",
+      "order_by": "timestamp",
+      "order_direction": "DESC"
+    }
+  },
+  {
+    "prompt": "Locate dialogue units where the prompt includes 'education reform' and sort them by date.",
+    "args": { "prompt": "education reform", "order_by": "timestamp" }
+  },
+  {
+    "prompt": "List dialogue units with a negative sentiment under 0.3 and categorize them by topic.",
+    "args": { "sentiment": { "negative_score": "< 0.3" } }
+  },
+  {
+    "prompt": "Query dialogue units by intent 'inform' that begin from the start of this year.",
+    "args": { "intent": "inform", "startime": "2023-01-01T00:00:00" }
+  },
+  {
+    "prompt": "Retrieve any dialogue units that include the word 'election' in their responses.",
+    "args": { "response": "election" }
+  },
+  {
+    "prompt": "Could you find dialogue units that discuss 'Technology' with any positive sentiment?",
+    "args": { "topic": "Technology" }
+  },
+  {
+    "prompt": "Access dialogue units from discussions on 'Mental Health' with high engagement.",
+    "args": { "topic": "Mental Health" }
+  },
+  {
+    "prompt": "Show dialogue units where the prompt asked about 'sustainable practices'.",
+    "args": { "prompt": "sustainable practices" }
+  },
+  {
+    "prompt": "Identify dialogue units that have phrases similar to 'quantum computing' sorted by relevance.",
+    "args": { "phrase": "quantum computing", "order_by": "phrase" }
+  },
+  {
+    "prompt": "Filter dialogue units by the response phrase 'renewable energy' and list the most recent first.",
+    "args": {
+      "response": "renewable energy",
+      "order_by": "timestamp",
+      "order_direction": "DESC"
+    }
+  },
+  {
+    "prompt": "Explore dialogue units on the topic 'Education' with prompts from last week.",
+    "args": { "topic": "Education", "startime": "last week" }
+  },
+  {
+    "prompt": "Search and list all dialogue units with 'negotiation' as their intent, arranged chronologically.",
+    "args": { "intent": "negotiation", "order_by": "timestamp" }
+  },
+  {
+    "prompt": "Extract dialogue units that have a sentiment more positive than 0.5 discussing 'Finance'.",
+    "args": { "topic": "Finance", "sentiment": { "positive_score": "> 0.5" } }
+  },
+  {
+    "prompt": "Scan for dialogue units addressing 'Urban Planning' from discussions earlier this year.",
+    "args": { "topic": "Urban Planning", "startime": "this year" }
+  },
+  {
+    "prompt": "Pull up dialogue units that tackle the issue of 'privacy' in digital communications.",
+    "args": { "topic": "privacy" }
+  }
+]

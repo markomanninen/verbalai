@@ -1,0 +1,122 @@
+[
+  {
+    "prompt": "Could you fetch the current discussion?",
+    "args": {
+      "discussion_id": "current"
+    }
+  },
+  {
+    "prompt": "Show me the details for the latest discussion.",
+    "args": {
+      "discussion_id": "latest"
+    }
+  },
+  {
+    "prompt": "I need to retrieve the oldest conversation, please.",
+    "args": {
+      "discussion_id": "oldest"
+    }
+  },
+  {
+    "prompt": "Can you pull up the last discussion?",
+    "args": {
+      "discussion_id": "last"
+    }
+  },
+  {
+    "prompt": "Please, access the record for the first discussion.",
+    "args": {
+      "discussion_id": "first"
+    }
+  },
+  {
+    "prompt": "Load the earliest discussion by ID.",
+    "args": {
+      "discussion_id": "earliest"
+    }
+  },
+  {
+    "prompt": "What's stored under the newest discussion ID?",
+    "args": {
+      "discussion_id": "newest"
+    }
+  },
+  {
+    "prompt": "Retrieve the featured conversation.",
+    "args": {
+      "discussion_id": "featured"
+    }
+  },
+  {
+    "prompt": "Bring up the information for the active discussion ID.",
+    "args": {
+      "discussion_id": "active"
+    }
+  },
+  {
+    "prompt": "Retrieve a random discussion.",
+    "args": {
+      "discussion_id": "random"
+    }
+  },
+  {
+    "prompt": "Could you fetch the discussion with ID 1020?",
+    "args": {
+      "discussion_id": 1020
+    }
+  },
+  {
+    "prompt": "Show me the details for discussion number 205.",
+    "args": {
+      "discussion_id": 205
+    }
+  },
+  {
+    "prompt": "I need to retrieve a conversation, ID 54, please.",
+    "args": {
+      "discussion_id": 54
+    }
+  },
+  {
+    "prompt": "Can you pull up the discussion with ID 314?",
+    "args": {
+      "discussion_id": 314
+    }
+  },
+  {
+    "prompt": "Please, access the record for discussion 21.",
+    "args": {
+      "discussion_id": 21
+    }
+  },
+  {
+    "prompt": "Load discussion by ID 404.",
+    "args": {
+      "discussion_id": 404
+    }
+  },
+  {
+    "prompt": "What's stored under discussion ID 777?",
+    "args": {
+      "discussion_id": 777
+    }
+  },
+  {
+    "prompt": "Retrieve the conversation that has the ID 990.",
+    "args": {
+      "discussion_id": 990
+    }
+  },
+  {
+    "prompt": "Bring up the information for discussion ID 56.",
+    "args": {
+      "discussion_id": 56
+    }
+  },
+  {
+    "prompt": "I'd like to see the details of the discussion identified by 203.",
+    "args": {
+      "discussion_id": 203
+    }
+  }
+]

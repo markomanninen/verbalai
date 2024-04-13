@@ -1,0 +1,144 @@
+[
+  {
+    "prompt": "Can you remove the 'Health' category from the last discussion?",
+    "args": {
+      "discussion_id": "last",
+      "name": "Health"
+    }
+  },
+  {
+    "prompt": "Please delete the 'Tech Trends' category from our latest discussion.",
+    "args": {
+      "discussion_id": "latest",
+      "name": "Tech Trends"
+    }
+  },
+  {
+    "prompt": "I need the category labeled 'Education' removed from the first discussion entry.",
+    "args": {
+      "discussion_id": "first",
+      "name": "Education"
+    }
+  },
+  {
+    "prompt": "Take off the 'Travel' category from the discussion with id 245.",
+    "args": {
+      "discussion_id": 245,
+      "name": "Travel"
+    }
+  },
+  {
+    "prompt": "Strip out 'Sports' category from the discussion marked as featured.",
+    "args": {
+      "discussion_id": "featured",
+      "name": "Sports"
+    }
+  },
+  {
+    "prompt": "Would you kindly expunge the category 'Food' from the oldest discussion on record?",
+    "args": {
+      "discussion_id": "oldest",
+      "name": "Food"
+    }
+  },
+  {
+    "prompt": "Execute removal of 'Finance' from the current active discussion, please.",
+    "args": {
+      "discussion_id": "active",
+      "name": "Finance"
+    }
+  },
+  {
+    "prompt": "Eliminate the 'Art' category from our most recent discussion.",
+    "args": {
+      "discussion_id": "latest",
+      "name": "Art"
+    },
+    "comment": "'most recent' is mapped to 'latest'."
+  },
+  {
+    "prompt": "Proceed to detach the 'Music' category from the discussion 789.",
+    "args": {
+      "discussion_id": 789,
+      "name": "Music"
+    }
+  },
+  {
+    "prompt": "Undo the 'Science' category assignment from the featured discussion.",
+    "args": {
+      "discussion_id": "featured",
+      "name": "Science"
+    }
+  },
+  {
+    "prompt": "I wish to have the 'History' category withdrawn from the earliest discussion.",
+    "args": {
+      "discussion_id": "earliest",
+      "name": "History"
+    }
+  },
+  {
+    "prompt": "Erase the 'Biotech' category from discussion numbered 456.",
+    "args": {
+      "discussion_id": 456,
+      "name": "Biotech"
+    }
+  },
+  {
+    "prompt": "Request to clear the 'Innovation' category from our active discussion session.",
+    "args": {
+      "discussion_id": "active",
+      "name": "Innovation"
+    }
+  },
+  {
+    "prompt": "Action required: remove 'Adventure' from the newest discussion on the platform.",
+    "args": {
+      "discussion_id": "newest",
+      "name": "Adventure"
+    }
+  },
+  {
+    "prompt": "Command to relieve the 'Philosophy' category from the previous discussion entry.",
+    "args": {
+      "discussion_id": "previous",
+      "name": "Philosophy"
+    }
+  },
+  {
+    "prompt": "Aim to dispel the 'Virtual Reality' category from discussion ID 321.",
+    "args": {
+      "discussion_id": "321",
+      "name": "Virtual Reality"
+    }
+  },
+  {
+    "prompt": "Engage removal of the 'Environmental' category from the last discussion we had.",
+    "args": {
+      "discussion_id": "last",
+      "name": "Environmental"
+    }
+  },
+  {
+    "prompt": "Purge the 'Automotive' category from our current discussion thread.",
+    "args": {
+      "discussion_id": "current",
+      "name": "Automotive"
+    }
+  },
+  {
+    "prompt": "Facilitate the removal of 'Legal' category from the discussion with ID 654.",
+    "args": {
+      "discussion_id": 654,
+      "name": "Legal"
+    }
+  },
+  {
+    "prompt": "Demand retraction of the 'Entrepreneurship' category from the discussion held last.",
+    "args": {
+      "discussion_id": "last",
+      "name": "Entrepreneurship"
+    },
+    "comment": "If the discussion was referred as last Tuesday, it would require to search discussions first and let user pick up the right discussion in the next step."
+  }
+]
