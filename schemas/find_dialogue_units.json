@@ -48,7 +48,7 @@
         "type": ["string", "null"],
         "description": "Filter dialogue units with a specific intent using an exact match. Intents are lowercase single-word identifiers."
       },
-      "startime": {
+      "starttime": {
         "type": ["string", "null"],
         "description": "Start of the timestamp range for filtering dialogue units, in ISO 8601 format."
       },
