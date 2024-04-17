@@ -57,19 +57,28 @@ class VectorDB:
         self.index = AnnoyIndex(self.embedding_dim, 'angular')
         self.new_data_added = False
         self.session_id = None
+        self.previous_discussion = None
         self.current_discussion_id = None
         self.latest_discussion_id = None
+        self.first_discussion_date = None
         self.load_or_initialize_index()
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.execute("PRAGMA foreign_keys = ON")
         if not self.check_tables_exist():
             self._init_db()
     
+    def set_first_discussion_date(self):
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT starttime FROM discussions ORDER BY starttime ASC LIMIT 1")
+        row = cursor.fetchone()
+        self.first_discussion_date = row[0]
+
     def set_latest_discussion_id(self):
         cursor = self.conn.cursor()
         cursor.execute("SELECT MAX(id) FROM discussions")
         row = cursor.fetchone()
         self.latest_discussion_id = row[0] if row else 0
+        self.previous_discussion = self.retrieve_discussion_by_id(self.latest_discussion_id)
     
     def set_current_session_discussion_id(self):
         cursor = self.conn.cursor()
@@ -97,7 +106,7 @@ class VectorDB:
 
     def create_new_session(self):
         
-        # Set the latest discussion ID before creating a new session
+        # Set the latest/previous discussion ID before creating a new session
         self.set_latest_discussion_id()
         
         self.session_id = SessionManager(
@@ -106,6 +115,7 @@ class VectorDB:
             session_table_id_field="session_id", 
             session_table_endtime_field="endtime").create_new_session()
         
+        self.set_first_discussion_date()
         # Set the current discussion ID after creating a new session
         self.set_current_session_discussion_id()
         
@@ -123,6 +133,15 @@ class VectorDB:
     def _init_db(self):
         """ Initialize the SQLite database. """
         cursor = self.conn.cursor()
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS data (
+            id INTEGER PRIMARY KEY,
+            key TEXT NOT NULL,
+            value TEXT,
+            group TEXT,
+            updated TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (key, group)
+        )''')
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS discussions (
             id INTEGER PRIMARY KEY,
@@ -185,7 +204,7 @@ class VectorDB:
     def add_dialogue_unit(self, prompt, response, topics=[], sentiment={}, intent=None):
         """ Index a new entry to the current discussion. """
         cursor = self.conn.cursor()
-        cursor.execute('INSERT INTO dialogue_units (prompt, response, intent, discussion_id) VALUES (?, ?, ?, ?)', (prompt, response, intent, self.latest_discussion_id))
+        cursor.execute('INSERT INTO dialogue_units (prompt, response, intent, discussion_id) VALUES (?, ?, ?, ?)', (prompt, response, intent, self.current_discussion_id))
         dialogue_unit_id = cursor.lastrowid
         
         # Insert sentiment scores
@@ -351,7 +370,7 @@ class VectorDB:
     def find_similar_within_ids(self, vector, limit, allowed_ids):
         # Perform the unrestricted search
         all_ids, distances = self.index.get_nns_by_vector(vector, n=limit*10, include_distances=True)  # Increase n if needed
-        logger.info("find_similar_within_ids", all_ids, distances)
+        logger.info("find_similar_within_ids: %s distances: %s" % (all_ids, list(map(lambda x: round(x, 3), distances))))
         
         # Rebuild_index uses special indexing to separate prompt and response
         # But is requires to decode indices back to dialogue unit ids
@@ -412,16 +431,16 @@ class VectorDB:
         # Time range filters - allowing for independent specification
         if starttime_start:
             conditions.append("d.starttime >= ?")
-            params.append(starttime_start)
+            params.append(starttime_start.replace("T", " "))
         if endtime_start:
             conditions.append("d.starttime <= ?")
-            params.append(endtime_start)
+            params.append(endtime_start.replace("T", " "))
         if starttime_end:
             conditions.append("d.endtime >= ?")
-            params.append(starttime_end)
+            params.append(starttime_end.replace("T", " "))
         if endtime_end:
             conditions.append("d.endtime <= ?")
-            params.append(endtime_end)
+            params.append(endtime_end.replace("T", " "))
 
         # Category filter
         if category and any(["name" in category, "score" in category]):
@@ -515,7 +534,7 @@ class VectorDB:
             distances = [None for _ in ids]
             return ids, distances
     
-    def construct_sql_query(self, topic=None, sentiment=None, intent=None, prompt=None, response=None, discussion=False, starttime=None, endtime=None, order_by="timestamp", order_direction="DESC"):
+    def construct_sql_query(self, topic=None, sentiment=None, intent=None, prompt=None, response=None, discussion_id=None, starttime=None, endtime=None, order_by="timestamp", order_direction="DESC"):
         """
         Constructs a single SQL query to fetch conversation IDs based on provided filters, including order and limit.
         """
@@ -549,43 +568,39 @@ class VectorDB:
 
         # Default session value is False because we dont want to return entries that are possibly in the
         # message context window
-        if discussion is not None:
+        if discussion_id is not None:
             query += """
             JOIN discussions d ON du.discussion_id = d.id
             """
-            # Search from the current session, or excluding the current session
-            if isinstance(discussion, bool):
-                conditions.append(f"d.id {"" if discussion else "!"}= ?")
-                params.append(self.current_discussion_id)
-            else:
-                # Assume session id
-                conditions.append(f"d.id = ?")
-                params.append(discussion)
-            # If session is None, all sessions including the current are returned
-        
-        # Additional filters
-        if intent:
-            conditions.append("du.intent = ?")
-            params.append(intent)
-        
-        if prompt:
-            conditions.append("du.prompt LIKE ?")
-            params.append('%' + prompt + '%')
-        
-        if response:
-            conditions.append("du.response LIKE ?")
-            params.append('%' + response + '%')
+            discussion_id = self.extract_discussion_id(discussion_id, include_random=True)
+            # Assume session id
+            conditions.append(f"d.id = ?")
+            params.append(discussion_id)
+        else:
+            
+            # Additional filters
+            if intent:
+                conditions.append("du.intent = ?")
+                params.append(intent)
+            
+            if prompt:
+                conditions.append("du.prompt LIKE ?")
+                params.append('%' + prompt + '%')
+            
+            if response:
+                conditions.append("du.response LIKE ?")
+                params.append('%' + response + '%')
 
-        # Timestamps
-        if starttime and endtime:
-            conditions.append("du.timestamp BETWEEN ? AND ?")
-            params.extend([starttime, endtime])
-        elif starttime:
-            conditions.append("du.timestamp >= ?")
-            params.append(starttime)
-        elif endtime:
-            conditions.append("du.timestamp <= ?")
-            params.append(endtime)
+            # Timestamps
+            if starttime and endtime:
+                conditions.append("du.timestamp BETWEEN ? AND ?")
+                params.extend([starttime.replace("T", " "), endtime.replace("T", " ")])
+            elif starttime:
+                conditions.append("du.timestamp >= ?")
+                params.append(starttime.replace("T", " "))
+            elif endtime:
+                conditions.append("du.timestamp <= ?")
+                params.append(endtime.replace("T", " "))
 
         # Adding WHERE conditions
         if conditions:
@@ -605,7 +620,7 @@ class VectorDB:
         """Retrieve discussion by ID along with the count of associated dialogue units."""
         cursor = self.conn.cursor()
         # Retrieve the main discussion details
-        cursor.execute('SELECT id, title, starttime, endtime, featured FROM discussions WHERE id = ?', (discussion_id,))
+        cursor.execute('SELECT starttime, title, endtime, featured FROM discussions WHERE id = ?', (discussion_id,))
         discussion = cursor.fetchone()
 
         if discussion:
@@ -617,11 +632,11 @@ class VectorDB:
             categories = self.retrieve_categories(discussion_id)
 
             return {
-                "discussion_id": discussion[0],
+                "discussion_id": discussion_id,
+                "starttime": discussion[0],
                 "title": discussion[1],
-                "starttime": discussion[2],
-                "endtime": discussion[3],
-                "featured": bool(discussion[4]),
+                "endtime": discussion[2],
+                "featured": bool(discussion[3]),
                 "dialogue_unit_count": dialogue_unit_count,
                 "categories": categories
             }
@@ -634,7 +649,7 @@ class VectorDB:
         cursor = self.conn.cursor()
 
         # Retrieve the main entry details
-        cursor.execute('SELECT prompt, response, timestamp, intent, discussion_id FROM dialogue_units WHERE id = ?', (dialogue_unit_id,))
+        cursor.execute('SELECT timestamp, prompt, response, intent, discussion_id FROM dialogue_units WHERE id = ?', (dialogue_unit_id,))
         dialogue_unit = cursor.fetchone()
 
         if dialogue_unit:
@@ -659,20 +674,23 @@ class VectorDB:
                 }
             
             # Retrieve discussion
-            cursor.execute('SELECT id, title, starttime, endtime, featured FROM discussions WHERE id = ?', (dialogue_unit[4],))
+            discussion_id = dialogue_unit[4]
+            cursor.execute('SELECT starttime, title, endtime, featured FROM discussions WHERE id = ?', (discussion_id,))
             discussion_row = cursor.fetchone()
             discussion = { 
-                "discussion_id": discussion_row[0], 
-                "starttime": discussion_row[1], 
+                "discussion_id": discussion_id, 
+                "starttime": discussion_row[0], 
+                "title": discussion_row[1], 
                 "endtime": discussion_row[2],
                 "featured": discussion_row[3],
-                "categories": self.retrieve_categories(discussion_row[0])
+                "categories": self.retrieve_categories(discussion_id)
             }
 
             return {
-                "prompt": dialogue_unit[0],
-                "response": dialogue_unit[1],
-                "timestamp": dialogue_unit[2],
+                "dialogue_unit_id": dialogue_unit_id,
+                "timestamp": dialogue_unit[0],
+                "prompt": dialogue_unit[1],
+                "response": dialogue_unit[2],
                 "intent": dialogue_unit[3],
                 "topics": topics,
                 "sentiment": sentiment,
@@ -711,13 +729,13 @@ class VectorDB:
         if ("starttime" in filters and filters["starttime"]) or ("endtime" in filters and filters["endtime"]):
             if filters["starttime"] and filters["endtime"]:
                 where_clause += " AND e.timestamp BETWEEN ? AND ?"
-                params.extend([filters["starttime"], filters["endtime"]])
+                params.extend([filters["starttime"].replace("T", " "), filters["endtime"].replace("T", " ")])
             elif filters["starttime"]:
                 where_clause += " AND e.timestamp > ?"
-                params.extend([filters["starttime"]])
+                params.extend([filters["starttime"].replace("T", " ")])
             elif filters["endtime"]:
                 where_clause += " AND e.timestamp < ?"
-                params.extend([filters["endtime"]])
+                params.extend([filters["endtime"].replace("T", " ")])
 
         
         join_clause += """

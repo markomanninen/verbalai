@@ -276,6 +276,18 @@ schemas = {
             "input_schema": {
                 "type": "object",
                 "properties": {
+                    "discussion_id": {
+                        "description": "The unique identifier of the discussion to be retrieved. Special strings like current, latest, previous, last, and first are interpreted internally.",
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "enum": ["current", "latest", "previous", "last", "first", "earliest", "newest", "oldest", "random", "active", "featured"]
+                            },
+                            {
+                                "type": "integer"
+                            }
+                        ]
+                    },
                     "phrase": {
                         "type": ["string", "null"],
                         "description": "The query phrase will be compared/matched against dialogue units for semantic similarity of prompt-response texts in the vector storage."

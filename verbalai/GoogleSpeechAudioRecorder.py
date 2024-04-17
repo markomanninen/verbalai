@@ -195,6 +195,7 @@ class AudioRecorder:
         self.audio_queue = Queue()
         self.text_queue = Queue()
         self.word_buffer = []
+        self.print_buffer = []
         # Initialize the worker process for audio processing
         self.worker_process = Process(target=audio_processing_worker, args=(self.audio_queue, self.language, self.text_queue))
         self.active = True

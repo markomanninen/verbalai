@@ -62,8 +62,8 @@ class AudioRecorder:
         # Queue for storing incoming transcription tokens
         # and sending them to the message handler
         self.text_queue = Queue()
-        # Not used in Deepgram implementation
         self.word_buffer = []
+        self.print_buffer = []
         self.previous_speaker = None
 
         self.active = True
@@ -302,7 +302,7 @@ class AudioRecorder:
             # To get UtteranceEnd, the following must be set:
             interim_results=True,
             utterance_end_ms="1500",
-            vad_events=True,
+            vad_events=True
         )
         # Start the Deepgram connection
         self.dg_connection.start(options)
@@ -318,9 +318,9 @@ class AudioRecorder:
         
         try:
             # wait until finished
-            input("############################################################\n> ")
+            input("############################################################\n")
         except KeyboardInterrupt:
-            raise
+            pass
 
         print("############################################################")
         print("# Listening ended.")
