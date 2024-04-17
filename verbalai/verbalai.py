@@ -18,14 +18,31 @@ from openai import OpenAI
 from colorama import init, Fore, Style, Back
 # Library imports
 from .prompts import (
-    short_mode, 
-    long_mode, 
-    previous_context, 
-    system_message, 
-    summary_generator_prompt
+    short_mode,
+    long_mode,
+    previous_context,
+    system_message,
+    system_message_tools,
+    summary_generator_prompt,
+    system_message_metadata,
+    system_message_find_database,
+    system_message_find_database_entry,
+    system_message_database_statistic,
+    system_message_tools_human_format,
+    system_message_metadata_without_tools
 )
 from .audio_stream_server import ServerThread
 from .deepgramio import DeepgramIO
+from .VectorDB import VectorDB
+# NOTE: tool chain and intent module has been disabled
+# these and associated variables can be uncommented,
+# if developing the sub project related to them
+# at the moment, custom model and claude tool inference does not
+# work seamlessly in the user/AI dialogue compared to
+# providing tools in system prompt as json schemas
+#from .commands import predict_intent
+#from .tool_chain import ToolChain
+from .gpt_token_calculator import GPTTokenCalculator
 
 # Import log lonfig as a side effect only
 from .log_config import setup_logging
@@ -72,6 +89,21 @@ ascii_art = """
 # Initialize the colorama module for colored text output
 init(autoreset=True)
 
+# Initialize the VectorDB instance
+vector_db = VectorDB()
+
+# Initialize the ToolChain instance
+#tool_chain = None
+
+# Initialize the intent (command) model path
+intent_model_path = "models/vai_model"
+
+# Initialize the low confidence threshold for command model tool prediction
+low_confidence_threshold = 0.899
+
+# Initialize session id
+session_id = None
+
 # Global variables
 default_input_voice_recognition_language = "en-US"
 feedback_word_buffer_limit = 25
@@ -79,9 +111,10 @@ feedback_token_limit = 20
 response_token_limit = 150
 # For testing purposes, set the phrase time limit to 5 seconds
 feedback_word_buffer_limit = 25
-feedback_token_limit = 10
-response_token_limit = 20
+feedback_token_limit = 20
+response_token_limit = 250
 
+# Google speech recognition properties
 phrase_time_limit = 10
 calibration_time = 2
 
@@ -115,6 +148,12 @@ openai_models = [
     "gpt-3.5-turbo-16k-0613"
 ]
 
+# Flag to indicate whether to use function calling tools or not
+use_function_calling_tools = False
+
+# Command extraction model
+command_extraction_model = "claude-3-haiku-20240307"
+
 # Available models for the chatbot
 available_models = anthropic_models + openai_models
 
@@ -122,7 +161,7 @@ available_models = anthropic_models + openai_models
 voice_id = "29vD33N1CtxCmqQRPOHJ"
 
 # Deepgram voice ID
-deegram_voice_id = "aura-asteria-en"
+deepgram_voice_id = "aura-asteria-en"
 
 # Eleven Labs voice model ID
 # eleven_monolingual_v1, eleven_multilingual_v1
@@ -201,6 +240,8 @@ deepgram_streamer = None
 
 use_deepgram_streamer = False
 
+gpt_token_calculator = None
+
 ###################################################
 # CONSOLE MAGIC
 ###################################################
@@ -220,6 +261,87 @@ def freeze_cursor():
 def invert_text(text):
     """ Inverts the text color and background color for a given text string. """
     return Back.RED + Style.BRIGHT + Fore.BLACK + text + Style.RESET_ALL
+
+
+###################################################
+# COGNITIVE MODEL CALLBACKS
+###################################################
+
+
+def find_discussions(kwargs):
+    try:
+        discussions = vector_db.find_discussions(**kwargs)
+        return f"\n\n{[{key: (", ".join([category["name"] for category in value]) if key == "categories" else value) for key, value in vector_db.retrieve_discussion_by_id(id).items() if key in ["discussion_id", "starttime", "title", "categories"]} for id in discussions]}. Format in markdown table format starting with id.", True
+        #return f"\n\n{[vector_db.retrieve_discussion_by_id(id) for id in discussions]}. Format in markdown table format starting with id.", True
+    except Exception as e:
+        return f"There was a problem on finding the discussions; {e}", False
+
+
+def find_dialogue_units(kwargs):
+    try:
+        dialogues, distances = vector_db.find_dialogue_units(**kwargs)
+        return f"\n\n{[{key: (value[:40]+("..." if len(value)>40 else "") if key in ["prompt", "response"] else value) for key, value in vector_db.retrieve_dialogue_unit_by_id(id).items() if key in ["dialogue_unit_id", "timestamp", "prompt", "response"]} for id in dialogues]}. Format in markdown table format starting with id.", True
+        #return f"\n\n{[vector_db.retrieve_dialogue_unit_by_id(id) for id in dialogues]}. Format in markdown table format starting with id.", True
+    except Exception as e:
+        return f"There was a problem on finding the dialogue units; {e}", False
+
+
+def retrieve_discussion_by_id(kwargs):
+    try:
+        kwargs["discussion_id"] = vector_db.extract_discussion_id(kwargs["discussion_id"], include_random=True)
+        discussion = vector_db.retrieve_discussion_by_id(kwargs["discussion_id"])
+        return f"Discussion details: {discussion}", True
+    except Exception as e:
+        return f"There was a problem on retrieving the discussion; {e}", False
+
+
+def retrieve_dialogue_unit_by_id(kwargs):
+    try:
+        dialogue = vector_db.retrieve_dialogue_unit_by_id(kwargs["dialogue_unit_id"])
+        return f"Dialogue unit details: {dialogue}", True
+    except Exception as e:
+        return f"There was a problem on retrieving the dialogue unit; {e}", False
+
+
+def remove_category(kwargs):
+    try:
+        kwargs["discussion_id"] = vector_db.extract_discussion_id(kwargs["discussion_id"])
+        vector_db.remove_category(**kwargs)
+        categories = vector_db.retrieve_categories(kwargs["discussion_id"])
+        return f"Discussion category has been removed successfully. Categories for the modified discussion are currently: {categories}", True
+    except Exception as e:
+        return f"There was a problem on removing the category from the discussion; {e}", False
+
+
+def modify_discussion(kwargs):
+    try:
+        kwargs["discussion_id"] = vector_db.extract_discussion_id(kwargs["discussion_id"])
+        vector_db.modify_discussion(**kwargs)
+        discussion = vector_db.retrieve_discussion_by_id(kwargs["discussion_id"])
+        return f"Discussion name|featured flag has been modified successfully. Discussion details are currently: {discussion}", True
+    except Exception as e:
+        return f"There was a problem on modifying the discussion; {e}", False
+
+
+def assign_category(kwargs):
+    try:
+        kwargs["discussion_id"] = vector_db.extract_discussion_id(kwargs["discussion_id"])
+        vector_db.assign_category(**kwargs)
+        categories = vector_db.retrieve_categories(kwargs["discussion_id"])
+        return f"Category has been assigned to the discussion successfully. Categories for the modified discussion are currently: {categories}", True
+    except Exception as e:
+        return f"There was a problem on assigning category to the discussion; {e}", False
+
+
+callbacks = {
+    "assign_category": lambda kwargs: assign_category(kwargs),
+    "modify_discussion": lambda kwargs: modify_discussion(kwargs),
+    "remove_category": lambda kwargs: remove_category(kwargs),
+    "retrieve_dialogue_unit_by_id": lambda kwargs: retrieve_dialogue_unit_by_id(kwargs),
+    "retrieve_discussion_by_id": lambda kwargs: retrieve_discussion_by_id(kwargs),
+    "find_discussions": lambda kwargs: find_discussions(kwargs),
+    "find_dialogue_units": lambda kwargs: find_dialogue_units(kwargs)
+}
 
 
 ###################################################
@@ -264,9 +386,11 @@ def prompt(text, final=False):
     - str: The generated response to the input text, for logging or further processing.
     """
     
-    global inference_message_word_count, gpt_model, system_message, messages, short_mode, long_mode, username, response_token_limit, feedback_token_limit, voice_model_id, elevenlabs_streamer, disable_voice_output, verbose, deepgram_streamer
+    global gpt_token_calculator, inference_message_word_count, gpt_model, system_message, system_message_tools, messages, short_mode, long_mode, username, response_token_limit, feedback_token_limit, voice_model_id, elevenlabs_streamer, disable_voice_output, verbose, deepgram_streamer, deepgram_voice_id, system_message_find_database, system_message_find_database_entry, system_message_database_statistic, command_extraction_model, tool_chain, low_confidence_threshold, intent_model_path, use_function_calling_tools, system_message_tools_human_format
     
     text = text.strip()
+    
+    inference_message_word_count += len(text.split(" "))
     
     if messages and messages[-1]["role"] == "user":
         messages[-1]["content"].append({"type": "text", "text": text})
@@ -276,9 +400,115 @@ def prompt(text, final=False):
             "content": [{"type": "text", "text": text}]
         })
     
-    inference_message_word_count += len(text.split(" "))
+    topics = []
+    sentiment = {}
+    intent = ""
+    tools = []
+    
+    # Retrieve user prompt metadata and function calling tool extraction with GPT
+    # Metadata function relies on the global messages variable
+    latest_messages = messages[-5:]
+    metadata = gpt_retrieve_metadata(latest_messages)
+    if metadata:
+        topics = metadata.get("topics", [])
+        sentiment = metadata.get("sentiment", {})
+        intent = metadata.get("intent", "")
+        tools = metadata.get("tools", [])
+    
+    logger.info(metadata)
+
+    if final and use_function_calling_tools and tools:
+        
+        # If tools are found, use them to infer extra content to the messages
+        
+        # TODO: At the moment, consequencing tools do not known the results provided
+        # by the earlier tool. That could be achieved by including metadata retrieval to the loop
+        # and let LLM construct arguments again. If messages contain the former results, LLM could
+        # possibly infer the correct arguments based on the last result. But on the other hand,
+        # for efficiency, there can be cases where former results has no effect of the latter
+        # tools. Also, intent, sentiment, and topics are redundant in the latter tools so the 
+        # metadata retrieval system prompt might benefit on being different compared to the initial one
+        print("")
+        for entry in tools:
+            
+            tool, args = entry["tool"], entry["arguments"]
+            
+            success = False
+            response = ""
+            tool_messages = []
+            predicted_tool = tool
+            
+            if predicted_tool in callbacks:
+                try:
+                    # Call the callback function for the tool
+                    tool_answer, success = callbacks[predicted_tool](args)
+                    
+                    logger.info(f"Tool '{predicted_tool}' response ({success}): '{tool_answer}'.")
+                    
+                    assistant_message = f"Calling tool: {predicted_tool}. Input: {args}"
+                    user_message = f"User role: tool. Output: {tool_answer}"
+                    # Note: Tool schema words count is not included
+                    inference_message_word_count += len(assistant_message.split(" "))
+                    inference_message_word_count += len(user_message.split(" "))
+                    
+                    tool_messages = [
+                        {"role": "assistant", "content": [
+                                {"type": "text", "text": assistant_message}
+                            ]
+                        },
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": user_message}
+                            ]
+                        }
+                    ]
+                    
+                    if success:
+                        print(f"{Fore.YELLOW}✓ Tool {predicted_tool} activated and request succeed.\n")
+                    else:
+                        response = f"Error executing tool: {predicted_tool}; {tool_answer}"
+                        print(f"{Fore.RED}✗ {response}\n")
+                    
+                    intent = predicted_tool
+                    
+                except Exception as e:
+                    response = f"Error executing tool: {predicted_tool}; {e}"
+                    print(f"\n{Fore.RED}✗ {response}\n")
+                
+            else:
+                print(f"\n{Fore.YELLOW}? Tool not found: {predicted_tool}\n")
+            
+            # If tool processing succeeded, add the tool messages
+            if tool_messages:
+                messages.extend(tool_messages)
+            # else, add error response to messages
+            elif response:
+                messages.extend([
+                    {
+                        "role": "assistant", 
+                        "content": [{"type": "text", "text": "Processing the tool function request..."}]
+                    },
+                    {
+                        "role": "user", 
+                        "content": [{"type": "text", "text": f"User role: tool. Output: {response}"}]
+                    }
+                ])
+    
     # Generate the system message with the current mode, username, datetime, and previous context
-    system = system_message.replace("<<mode>>", long_mode if final else short_mode).replace("<<user>>", username).replace("<<datetime>>", time.strftime("%Y-%m-%d %H:%M:%S")).replace("<<previous_context>>", previous_context.replace("<<summary>>", summary) if summary else "")
+    system = system_message.\
+        replace("<<mode>>", long_mode if final else short_mode).\
+        replace("<<tools>>", system_message_tools_human_format if use_function_calling_tools else "").\
+        replace("<<user>>", username).\
+        replace("<<datetime>>", time.strftime("%Y-%m-%d %H:%M:%S")).\
+        replace("<<previous_context>>", previous_context.\
+            replace("<<summary>>", summary) if summary else "").\
+        replace("<<discussion_id>>", str(vector_db.current_discussion_id)).\
+        replace("<<previous_discussion>>", str(vector_db.previous_discussion)).\
+        replace("<<first_discussion_date>>", vector_db.first_discussion_date)
+    
+    # Log last 5 messages without index error
+    logger.info(messages[-min(len(messages), 5):])
     
     start_time = None
     @contextmanager
@@ -294,23 +524,29 @@ def prompt(text, final=False):
                     model = gpt_model,
                     messages = messages,
                     max_tokens = response_token_limit if final else feedback_token_limit,
-                    system = system
+                    system = system + (" - Answer shortly by few words only." if not final else "")
                 ) as stream:
                     yield stream.text_stream
+                    gpt_token_calculator.update_token_counts(stream.get_final_message(), gpt_model)
             # Else assume OpenAI model
             else:
                 def openai_stream():
+                    chat_messages = [{"role": "system", "content": system + (" - Answer shortly by few words only." if not final else "")}] + messages
                     chunks = gpt_client_openai.chat.completions.create(
                         model = gpt_model,
-                        messages = [{"role": "system", "content": system}] + messages,
+                        messages = chat_messages,
                         max_tokens = response_token_limit if final else feedback_token_limit,
                         stream = True,
                     )
                     for chunk in chunks:
                         if chunk.choices[0].delta.content:
                             yield chunk.choices[0].delta.content
+                    
+                    # TODO: collect contents from chat_messages
+                    # gpt_token_calculator.update_token_counts(chunks, gpt_model, chat_messages)
                 # Yield the generator itself for with context
                 yield openai_stream()
+                
         except Exception as e:
             logger.error(f"Error getting GPT stream: {e}")
             raise
@@ -326,7 +562,7 @@ def prompt(text, final=False):
         
         # Print the current time and the user's input in green/yellow color
         color = Fore.GREEN if final else Fore.YELLOW
-        print(Fore.WHITE + time.strftime("%Y-%m-%d-%H:%M:%S") + " " + color, end="", flush=True)
+        print(Fore.WHITE + time.strftime("%Y-%m-%dT%H:%M:%S") + " " + color, end="", flush=True)
         
         def text_stream():
             """ Stream the text from the GPT API response to console and text to speech service at the same time. """
@@ -343,7 +579,7 @@ def prompt(text, final=False):
                 audio_recorder.pause = True
                 # Start the Eleven Labs text-to-speech streaming only if final response is requested
                 try:
-                    streamer.process(voice_id, voice_model_id, text_stream, start_time)
+                    streamer.process(deepgram_voice_id if deepgram_streamer else voice_id, voice_model_id, text_stream, start_time)
                 except ConnectionResetError:
                     logger.error("Connection was reset by the server.")
                 except Exception as e:
@@ -380,9 +616,124 @@ def prompt(text, final=False):
         
         # Increase the message word count for total GPT API usage indication
         inference_message_word_count += len(response.strip().split(" "))
-        print(Fore.WHITE + f"\r\n{inference_message_word_count} words used in the session")
+        print(Fore.WHITE + f" ({inference_message_word_count}/${gpt_token_calculator.get_cost()})")
         # Return response for saving to log file
-        return response
+        return response, topics, sentiment, intent
+
+
+def gpt_retrieve_content(messages, system_message, max_tokens = 100, model = None):
+    
+    global gpt_model, anthropic_models, gpt_client_openai, gpt_client, gpt_token_calculator
+    
+    result = None
+    
+    model = model if model else gpt_model
+    
+    if gpt_model in anthropic_models:
+        message = gpt_client.messages.create(
+            model = model,
+            messages = messages,
+            max_tokens = max_tokens,
+            system = system_message,
+            temperature = 0
+        )
+        result = message.content[0].text
+        gpt_token_calculator.update_token_counts(message, model)
+    # Else assume OpenAI model
+    else:
+        chat_messages = [
+            {"role": "system", "content": system_message},
+        ] + messages
+        message = gpt_client_openai.chat.completions.create(
+            model = model,
+            messages = chat_messages,
+            max_tokens = max_tokens,
+            temperature = 0
+        )
+        result = message.choices[0].message.content
+        gpt_token_calculator.update_token_counts(message, model, result)
+    return result
+
+# TODO: remove
+def loads_first_json_block(text):
+    # Initial counts and flags
+    brace_count = 0
+    in_string = False
+    escape = False
+    json_start = -1
+    json_end = -1
+
+    # Iterate over the text by index and character
+    for i, char in enumerate(text):
+        if char == '"' and not escape:
+            in_string = not in_string
+        elif char == '\\' and not escape:
+            escape = True
+            continue
+        elif char == '{' and not in_string:
+            if brace_count == 0:
+                json_start = i
+            brace_count += 1
+        elif char == '}' and not in_string:
+            brace_count -= 1
+            if brace_count == 0:
+                json_end = i + 1
+                break
+        escape = False
+
+    logger.info(f"Retrieved JSON block: {text}")
+    # Extract and parse the JSON string if braces match up
+    if json_start != -1 and json_end != -1:
+        json_string = text[json_start:json_end]
+        try:
+            logger.info(f"Extracted JSON: {json_string}")
+            return json.loads(json_string)
+        except Exception as e:
+            logger.error(f"Error extracting JSON: {e}")
+    else:
+        logger.warn("No JSON string found.")
+    
+    return {}
+
+
+def extract_and_parse_json_block(text):
+    results = []
+    # Regex to extract all {} enclosed blocks, handling nested structures
+    pattern = re.compile(r'\{(?:[^{}]*(?:\{(?:[^{}]*(?:\{[^{}]*\})*[^{}]*)*\})*[^{}]*)*\}')
+    blocks = pattern.findall(text)
+    for block in blocks:
+        try:
+            # Attempt to load the JSON block
+            parsed_json = json.loads(block)
+            # Check for required keys in the JSON
+            if all(map(lambda x: x in parsed_json, ['topics', 'sentiment', 'intent', 'tools'])):
+                results.append(parsed_json)
+        except json.JSONDecodeError:
+            # If decoding fails, skip this block
+            continue
+    return results[0] if len(results) == 1 else {}
+
+
+def gpt_retrieve_metadata(messages):
+    
+    global system_message_metadata, command_extraction_model, username, system_message_tools, use_function_calling_tools, system_message_metadata_without_tools
+    
+    result = gpt_retrieve_content(
+        messages, 
+        (system_message_metadata if use_function_calling_tools else system_message_metadata_without_tools).\
+            replace("<<tools>>", system_message_tools if use_function_calling_tools else "").\
+            replace("<<user>>", username).\
+            replace("<<datetime>>", time.strftime("%Y-%m-%d %H:%M:%S")).\
+            replace("<<discussion_id>>", str(vector_db.current_discussion_id)).\
+            replace("<<previous_discussion>>", str(vector_db.previous_discussion)).\
+            replace("<<first_discussion_date>>", vector_db.first_discussion_date), 
+        500,
+        # Claude 3 Sonnet LLM seems to work best with prompt with schema to arguments inference,
+        # but Haiku is much cheaper and works almost as well.
+        command_extraction_model
+    )
+    
+    return extract_and_parse_json_block(result) if result else {}
 
 
 def gpt_inference(text, final=False):
@@ -417,30 +768,47 @@ def gpt_inference(text, final=False):
     catches any exceptions, optionally prints detailed error information depending on 
     the verbose flag, and returns False. On success, it returns True.
     """
-    global audio_recorder, verbose
+    global verbose, vector_db
     try:
         # Perform GPT inference on the given text prompt
-        response_text = prompt(text, final)
+        response_text, topics, sentiment, intent = prompt(text, final)
     except Exception as e:
-        logger.error(f"Error processing text; {e}")
+        logger.error(f"Error on processing text; {e}")
+        print(f"Error on processing text; {e}")
         if verbose:
             traceback.print_exc()
         return False
-    
+        
+    vector_db.add_dialogue_unit(
+        text, 
+        response_text, 
+        topics, 
+        sentiment, 
+        intent
+    )
+
     # Log the prompt, response, and metadata to a JSON Lines file
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     filename = "inference.jsonl"
     file_path = os.path.join(audio_recorder.session_dir, filename)
     
     with open(file_path, "a") as file:
-        data = {"prompt": text, "response": response_text, "timestamp": timestamp, "final": final}
+        data = {
+            "prompt": text, 
+            "response": response_text, 
+            "topics": topics, 
+            "sentiment": sentiment, 
+            "intent": intent, 
+            "timestamp": timestamp, 
+            "final": final
+        }
         # Convert the dictionary to a JSON string and write it to the file with a newline
         json_line = json.dumps(data) + "\n"
         file.write(json_line)
     return True
 
 
-def process_text(text, word_buffer):
+def process_text(text, word_buffer, print_buffer):
     """
     Processes incoming text by adding its words to a buffer and performs GPT inference
     when the buffer exceeds a specified limit.
@@ -469,15 +837,23 @@ def process_text(text, word_buffer):
     intermediate feedback (not final). After inference, it clears the buffer to reset 
     the process for subsequent inputs.
     """
-    global feedback_word_buffer_limit
+    global feedback_word_buffer_limit, audio_recorder
     if text.strip() != "":
-        print(f"> {text}")
+        if audio_recorder.pause:
+            print_buffer.extend(text)
+        else:
+            if print_buffer:
+                for print_text in print_buffer:
+                    print(f"> {print_text}")
+                print_buffer.clear()
+            print(f"> {text}")
         word_buffer.extend(text.split(" "))
-    if (len(word_buffer) + 1 > feedback_word_buffer_limit):
+    if ((len(word_buffer) + 1) > feedback_word_buffer_limit) and not audio_recorder.pause:
         # Perform GPT inference on the collected prompt,
         # but make the response an intermediate feedback only
-        gpt_inference(" ".join(word_buffer), final=False)
+        text = " ".join(word_buffer)
         word_buffer.clear()
+        gpt_inference(text, final=False)
         blink_cursor()
 
 
@@ -585,12 +961,19 @@ def summary_generator():
                     filename = f"summary_{timestamp}.txt"
                     file_path = os.path.join(audio_recorder.session_dir, filename)
                     with open(file_path, "a") as file:
-                        file.write("".join(gpt_stream.text_stream))
+                        summary = "".join(gpt_stream.text_stream)
+                        file.write(summary)
+                        vector_db.add_dialogue_unit(
+                            summary, 
+                            "", 
+                            ["summary"]
+                        )
                     print(f" See the file: {file_path}.")
             except Exception as e:
                 logger.error(f" Error generating summary; {e}")
         else:
             print("No conversation history to summarize.")
+        
         audio_recorder.pause = False
         blink_cursor()
 
@@ -627,11 +1010,11 @@ def short_feedback():
         
         if user_input:
             # Generate a short feedback response based on the user's input
-            feedback = prompt(user_input, False)
-            if feedback:
+            response_text, topics, sentiment, intent = prompt(user_input, False)
+            if response_text:
                 messages.append({
                     "role": "assistant", 
-                    "content": [{"type": "text", "text": feedback}]
+                    "content": [{"type": "text", "text": response_text}]
                 })
         else:
             print("No user input available for feedback.")
@@ -734,11 +1117,13 @@ def listen_for_flush_command():
                 else:
                     print(Fore.RED + f"\r\nListener paused. Please wait for GPT inference." + Fore.WHITE)
                 # Perform a full length GPT inference on the collected prompt
-                gpt_inference(" ".join(audio_recorder.word_buffer), final=True)
-                # Provide feedback to user to resume the recording mode
-                print(Fore.RED + f"\r\nResume back to the recording mode with {hotkey_pause}." + Fore.WHITE)
-                # Clear the word buffer after processing
+                prompt = " ".join(audio_recorder.word_buffer)
                 audio_recorder.word_buffer.clear()
+                gpt_inference(prompt, final=True)
+                # Provide feedback to user to resume the recording mode
+                print(Fore.RED + f"Resume back to the recording mode with {hotkey_pause}." + Fore.WHITE)
+                # Clear the word buffer after processing
+                #audio_recorder.word_buffer.clear()
             else:
                 if disable_voice_recognition:
                     print(Fore.RED + f"No words collected for inference. Resume to input mode with {hotkey_prompt}." + Fore.WHITE)
@@ -790,7 +1175,7 @@ def manage_word_buffer(text_queue):
         try:
             # Get the text from the text queue and process it
             text = text_queue.get(timeout=1)
-            process_text(text, audio_recorder.word_buffer)
+            process_text(text, audio_recorder.word_buffer, audio_recorder.print_buffer)
         except Empty:
             continue
 
@@ -885,11 +1270,11 @@ def main():
     - `-tl`, `--time_limit`: Set the phrase time limit for Google speech recognition.
     - `-ct`, `--calibration_time`: Set the calibration limit for Google speech recognition.
     - `-of`, `--output_audio_format`: Set the ElevenLabs output audio format (mp3 or wav).
-    - `-do`, `--disable_voice_output`: Disable ElevenLabs output audio.
-    - `-di`, `--disable_voice_recognition`: Disable Google voice recognition.
+    - `-do`, `--disable_voice_output`: Disable output audio.
+    - `-di`, `--disable_voice_recognition`: Disable voice recognition.
     - `-sf`, `--summary_file`: Import previous context for the discussion from the summary file.
     """
-    global audio_recorder, feedback_word_buffer_limit, voice_id, gpt_model, username, verbose, available_models, elevenlabs_streamer, phrase_time_limit, calibration_time, elevenlabs_output_format, disable_voice_output, disable_voice_recognition, summary, summary_file, elevenlabs_output_sample_rate, elevenlabs_output_bit_rate, audio_file_source, audio_recorder_type, audio_dir, audio_host, audio_port, audio_stream, deepgram_streamer, use_deepgram_streamer
+    global gpt_token_calculator, audio_recorder, feedback_word_buffer_limit, voice_id, gpt_model, username, verbose, available_models, elevenlabs_streamer, phrase_time_limit, calibration_time, elevenlabs_output_format, disable_voice_output, disable_voice_recognition, summary, summary_file, elevenlabs_output_sample_rate, elevenlabs_output_bit_rate, audio_file_source, audio_recorder_type, audio_dir, audio_host, audio_port, audio_stream, deepgram_streamer, use_deepgram_streamer, session_id, tool_chain, intent_model_path, low_confidence_threshold, use_function_calling_tools, deepgram_voice_id
     
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Bidirectional Chat with Speech Recognition")
@@ -899,6 +1284,8 @@ def main():
     parser.add_argument("-fl", "--feedback_limit", type=int, help=f"feedback word buffer threshold limit to make a GPT intermediate prompt suitable for a shorter feedback (default: {feedback_word_buffer_limit})", default=feedback_word_buffer_limit)
     
     parser.add_argument("-v", "--voice_id", type=str, help=f"Elevenlabs voice id (default: {voice_id})", default=voice_id)
+    
+    parser.add_argument("-dv", "--deepgram_voice_id", type=str, help=f"Deepgram voice id (default: {deepgram_voice_id})", default=deepgram_voice_id)
     
     models = ", ".join(available_models)
     parser.add_argument("-m", "--gpt_model", type=str, help=f"Anthropic Claude / OpenAI GPT language model. Available models: {models} (default: {gpt_model})", default=gpt_model)
@@ -911,9 +1298,9 @@ def main():
     
     parser.add_argument("-ct", "--calibration_time", type=int, help=f"Calibration limit for Google speech recognition ambient background noise (default: {calibration_time})", default=calibration_time)
     
-    parser.add_argument("-do", "--disable_voice_output", action=('store_false' if disable_voice_output else 'store_true'), help=f"Disable Elevenlabs output audio? (default: {disable_voice_output})")
+    parser.add_argument("-do", "--disable_voice_output", action=('store_false' if disable_voice_output else 'store_true'), help=f"Disable output audio? (default: {disable_voice_output})")
     
-    parser.add_argument("-di", "--disable_voice_recognition", action=('store_false' if disable_voice_recognition else 'store_true'), help=f"Disable Google voice recognition? (default: {disable_voice_recognition})")
+    parser.add_argument("-di", "--disable_voice_recognition", action=('store_false' if disable_voice_recognition else 'store_true'), help=f"Disable voice recognition? (default: {disable_voice_recognition})")
     
     parser.add_argument("-sf", "--summary_file", type=str, help=f"Import previous context for the discussion from the summary file (default: {summary_file})", default=summary_file)
     
@@ -938,6 +1325,12 @@ def main():
     parser.add_argument("-as", "--audio_stream", action=('store_false' if audio_stream else 'store_true'), help=f"Should we stream source audio files? (default: {audio_stream})")
     
     parser.add_argument("-dg", "--use_deepgram_streamer", action=('store_false' if use_deepgram_streamer else 'store_true'), help=f"Should we use deepgram for streaming text to voice? (default: {use_deepgram_streamer})")
+    
+    parser.add_argument("-im", "--intent_model_path", type=str, default=intent_model_path, help="Path to the intent prediction model.")
+    
+    parser.add_argument("-lct", "--low_confidence_threshold", type=float, default=low_confidence_threshold, help="Threshold below which predictions are considered to have low confidence and are not executed in the command model.")
+    
+    parser.add_argument("-fct", "--use_function_calling_tools", action=('store_false' if use_function_calling_tools else 'store_true'), help=f"Should we use function calling tools? (default: {use_function_calling_tools})")
     
     args = parser.parse_args()
     
@@ -978,13 +1371,14 @@ def main():
         # Import the correct ElevenlabsIO module based on the command line format argument
         ElevenlabsIO = import_elevenlabs_module(elevenlabs_output_format)
         
+        initial_buffer_size = 2
         # Initialize the Eleven Labs streamer
         if elevenlabs_output_format == "wav":
             # For WAV format, only the bit rate is needed
-            kwargs = {"bit_rate": elevenlabs_output_bit_rate}
+            kwargs = {"bit_rate": elevenlabs_output_bit_rate, "audio_buffer_in_seconds": initial_buffer_size}
         else:
             # For MP3 format, both the sample rate and bit rate are needed
-            kwargs = {"sample_rate": elevenlabs_output_sample_rate, "bit_rate": elevenlabs_output_bit_rate}
+            kwargs = {"sample_rate": elevenlabs_output_sample_rate, "bit_rate": elevenlabs_output_bit_rate, "audio_buffer_in_seconds": initial_buffer_size}
         
         # Initialize the Eleven Labs streamer with the appropriate arguments
         elevenlabs_streamer = ElevenlabsIO(**kwargs)
@@ -995,8 +1389,26 @@ def main():
     # Set the Anthropic Claude GPT model
     gpt_model = args.gpt_model
     
-    # Set the Eleven Labs / Deepgram voice ID
+    # Initialize function calling tools
+    use_function_calling_tools = args.use_function_calling_tools
+    
+    # Initialize the tool chain with the selected GPT model
+    #tool_chain = ToolChain(model=gpt_model)
+    
+    # Set intent (command) model path
+    intent_model_path = args.intent_model_path
+    
+    # Set the low confidence threshold for the command model
+    low_confidence_threshold = args.low_confidence_threshold
+    
+    # 
+    gpt_token_calculator = GPTTokenCalculator()
+    
+    # Set the Eleven Labs voice ID
     voice_id = args.voice_id
+    
+    # Set the Deepgram voice ID
+    deepgram_voice_id = args.deepgram_voice_id
     
     # Verbose print debug
     verbose = args.verbose
@@ -1050,6 +1462,9 @@ def main():
     
     # Initialize the AudioRecorder instance
     audio_recorder = audio_recorder_class(language=args.language)
+    
+    # Initialize session id for the application via VectorDB class
+    session_id = vector_db.create_new_session()
 
     # Start the flush command listener thread
     flush_thread = Thread(target=listen_for_flush_command, daemon=True)
@@ -1067,9 +1482,9 @@ def main():
     clear_history_thread = Thread(target=clear_message_history, daemon=True)
     clear_history_thread.start()
     
-    # Clear message history
-    short_feedback_thread = Thread(target=short_feedback, daemon=True)
-    short_feedback_thread.start()
+    # Short feedback
+    #short_feedback_thread = Thread(target=short_feedback, daemon=True)
+    #short_feedback_thread.start()
     
     # Start the word buffer manager thread
     buffer_manager_thread = Thread(
@@ -1115,12 +1530,16 @@ def main():
             "calibration_time": calibration_time,
             "save_audio_to_file": save_audio_to_file
         }
+        blink_cursor()
         audio_recorder.start_listening(**kwargs)
         # Print the hotkeys for user interaction
         print(f"# To get a full response, press {invert_text(hotkey_pause)}.\n# You can also enter text commands using {invert_text(hotkey_prompt)}.\n# To summarize dialogue, use {invert_text(hotkey_summarize)}.\n# Clear message history: {invert_text(hotkey_clear)}. Exit the bot: {invert_text(hotkey_exit)}.")
         print("############################################################\n")
+    else:
+        print(f"# You can enter text commands using {invert_text(hotkey_prompt)}.\n# To summarize dialogue, use {invert_text(hotkey_summarize)}.\n# Clear message history: {invert_text(hotkey_clear)}. Exit the bot: {invert_text(hotkey_exit)}.")
+        print("############################################################\n")
 
-    blink_cursor()
+    #blink_cursor()
 
     try:
         # Keep the main thread alive
@@ -1133,6 +1552,8 @@ def main():
             server_thread.shutdown()
     finally:
         # Cleanup the resources and exit the program
+        logger.info("Rebuilding vector database index.")
+        vector_db.rebuild_index()
         if elevenlabs_streamer:
             elevenlabs_streamer.quit()
         if deepgram_streamer:

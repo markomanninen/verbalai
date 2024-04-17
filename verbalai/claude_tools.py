@@ -9,7 +9,7 @@
 #       using a specific dialogue unit entry ID
 # - retrieve_discussion_by_id to query a database of conversations using a specific discussion ID
 # - find_discussions to query a database of discussions based on various criteria, including title, 
-#       featured, startime, endtime, and category
+#       featured, starttime, endtime, and category
 # - find_dialogue_units to query a database of dialogue units based on various criteria, 
 #       including phrase, topic, sentiment, intent, starttime, endtime, prompt, and response
 #
@@ -190,7 +190,7 @@ schemas = {
     "find_discussions": [
         {
             "name": "find_discussions",
-            "description": "Find Discussions - Arguments to query a database of discussions based on various criteria, including title, featured, startime, endtime, and category. Synonyms for discussion are for instance session, conversation, and chat. Discussion entries are distinct from dialogue unit entries. In a tool chain find_discussions usually folowed by a retrieve_discussion_by_id tool, which is followed by a find_dialogue_units tool, and finally retrieve_dialogue_unit_by_id tool.",
+            "description": "Find Discussions - Arguments to query a database of discussions based on various criteria, including title, featured, starttime, endtime, and category. Synonyms for discussion are for instance session, conversation, and chat. Discussion entries are distinct from dialogue unit entries. In a tool chain find_discussions usually folowed by a retrieve_discussion_by_id tool, which is followed by a find_dialogue_units tool, and finally retrieve_dialogue_unit_by_id tool.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -276,6 +276,18 @@ schemas = {
             "input_schema": {
                 "type": "object",
                 "properties": {
+                    "discussion_id": {
+                        "description": "The unique identifier of the discussion to be retrieved. Special strings like current, latest, previous, last, and first are interpreted internally.",
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "enum": ["current", "latest", "previous", "last", "first", "earliest", "newest", "oldest", "random", "active", "featured"]
+                            },
+                            {
+                                "type": "integer"
+                            }
+                        ]
+                    },
                     "phrase": {
                         "type": ["string", "null"],
                         "description": "The query phrase will be compared/matched against dialogue units for semantic similarity of prompt-response texts in the vector storage."
@@ -321,7 +333,7 @@ schemas = {
                         "type": ["string", "null"],
                         "description": "Filter dialogue units with a specific intent using an exact match. Intents are lowercase single-word identifiers."
                     },
-                    "startime": {
+                    "starttime": {
                         "type": ["string", "null"],
                         "description": "Start of the timestamp range for filtering dialogue units, in ISO 8601 format.",
                         #"pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"

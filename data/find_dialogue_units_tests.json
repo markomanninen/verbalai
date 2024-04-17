@@ -15,7 +15,7 @@
     "prompt": "I need to retrieve dialogue units that responded to prompts about 'Artificial Intelligence' starting from January 2020.",
     "args": {
       "prompt": "Artificial Intelligence",
-      "startime": "2020-01-01T00:00:00"
+      "starttime": "2020-01-01T00:00:00"
     }
   },
   {
@@ -40,7 +40,7 @@
   },
   {
     "prompt": "Query dialogue units by intent 'inform' that begin from the start of this year.",
-    "args": { "intent": "inform", "startime": "2023-01-01T00:00:00" }
+    "args": { "intent": "inform", "starttime": "2023-01-01T00:00:00" }
   },
   {
     "prompt": "Retrieve any dialogue units that include the word 'election' in their responses.",
@@ -72,7 +72,7 @@
   },
   {
     "prompt": "Explore dialogue units on the topic 'Education' with prompts from last week.",
-    "args": { "topic": "Education", "startime": "last week" }
+    "args": { "topic": "Education", "starttime": "last week" }
   },
   {
     "prompt": "Search and list all dialogue units with 'negotiation' as their intent, arranged chronologically.",
@@ -84,7 +84,7 @@
   },
   {
     "prompt": "Scan for dialogue units addressing 'Urban Planning' from discussions earlier this year.",
-    "args": { "topic": "Urban Planning", "startime": "this year" }
+    "args": { "topic": "Urban Planning", "starttime": "this year" }
   },
   {
     "prompt": "Pull up dialogue units that tackle the issue of 'privacy' in digital communications.",

@@ -5,6 +5,18 @@
     "type": "object",
     "description": "Arguments to query a database of dialogue units based on various criteria, including phrase, topic, sentiment, intent, starttime, endtime, prompt, and response. Note: Synonyms for dialogue unit are for instance prompt-response pair, conversation piece, chat fragment, discussion element, and interaction record. Dialogue units are distinct from discussion session entries. In a tool chain find_dialogue_units usually followed by a retrieve_dialogue_unit_by_id tool.",
     "properties": {
+      "discussion_id": {
+        "description": "The unique identifier of the discussion to be retrieved. Special strings like current, latest, previous, last, and first are interpreted internally.",
+        "oneOf": [
+            {
+                "type": "string",
+                "enum": ["current", "latest", "previous", "last", "first", "earliest", "newest", "oldest", "random", "active", "featured"]
+            },
+            {
+                "type": "integer"
+            }
+        ]
+      },
       "phrase": {
         "type": ["string", "null"],
         "description": "The query phrase will be compared/matched against dialogue units for semantic similarity of prompt-response texts in the vector storage."
@@ -48,7 +60,7 @@
         "type": ["string", "null"],
         "description": "Filter dialogue units with a specific intent using an exact match. Intents are lowercase single-word identifiers."
       },
-      "startime": {
+      "starttime": {
         "type": ["string", "null"],
         "description": "Start of the timestamp range for filtering dialogue units, in ISO 8601 format."
       },

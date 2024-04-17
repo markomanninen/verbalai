@@ -3,7 +3,7 @@
     "title": "Find Discussions Method Arguments",
     "name": "find_discussions",
     "type": "object",
-    "description": "Arguments to query a database of discussions based on various criteria, including title, featured, startime, endtime, and category. Synonyms for discussion are for instance session, conversation, and chat. Discussion entries are distinct from dialogue unit entries. In a tool chain find_discussions usually folowed by a retrieve_discussion_by_id tool, which is followed by a find_dialogue_units tool, and finally retrieve_dialogue_unit_by_id tool.",
+    "description": "Arguments to query a database of discussions based on various criteria, including title, featured, starttime, endtime, and category. Synonyms for discussion are for instance session, conversation, and chat. Discussion entries are distinct from dialogue unit entries. In a tool chain find_discussions usually folowed by a retrieve_discussion_by_id tool, which is followed by a find_dialogue_units tool, and finally retrieve_dialogue_unit_by_id tool.",
     "properties": {
       "title": {
         "type": ["string", "null"],
