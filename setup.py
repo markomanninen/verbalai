@@ -18,7 +18,9 @@ setup(
         'openai',
         'flask',
         'werkzeug',
-        'annoy'
+        'annoy',
+        'transformers',
+        'torch'
     ],
     extras_require={
         # TODO: Deepgram requires the following packages to be installed already
@@ -31,8 +33,6 @@ setup(
         # but there are tests that can be run with the trained intent prediction model
         'dev': [
             'numpy',
-            'transformers',
-            'torch',
             'pyyaml',
             'scikit-learn',
             'termcolor'

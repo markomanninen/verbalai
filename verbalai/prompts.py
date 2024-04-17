@@ -546,7 +546,7 @@ First discussion date: <<first_discussion_date>>
 Previous discussion: <<previous_discussion>>
 """
 
-user_profile_schema = """
+general_data_entry_schema = """
 {"update_data_entry": 
   [
     {
@@ -562,13 +562,13 @@ user_profile_schema = """
             "type": "string",
             "description": "Data property value."
           },
-          "group": {
+          "key_group": {
             "type": "string",
-            "description": "Data group property value.",
-            "enum": ["user_profile", "assistant_settings"]
+            "description": "Data key group property value.",
+            "enum": ["user_profile"]
           }
         },
-        "required": ["key", "value", "group"],
+        "required": ["key", "value", "key_group"],
         "additionalProperties": false
       }
     }
@@ -582,7 +582,7 @@ Deduce topics, sentiment, and intent of the user's input.
 Response format:
 {system_message_metadata_format_v3}
 You may update user profile data with a tool and arguments defined in the following schema:
-{user_profile_schema}
+{general_data_entry_schema}
 Respond with a JSON string only. Property names must be enclosed in double quotes. Do not generate intros, outros, explanations, etc.
 
 *****

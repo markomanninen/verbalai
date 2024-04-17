@@ -78,7 +78,10 @@ class VectorDB:
         cursor.execute("SELECT MAX(id) FROM discussions")
         row = cursor.fetchone()
         self.latest_discussion_id = row[0] if row else 0
-        self.previous_discussion = self.retrieve_discussion_by_id(self.latest_discussion_id)
+        try:
+            self.previous_discussion = self.retrieve_discussion_by_id(self.latest_discussion_id)
+        except ValueError:
+            self.previous_discussion = {}
     
     def set_current_session_discussion_id(self):
         cursor = self.conn.cursor()
@@ -138,9 +141,9 @@ class VectorDB:
             id INTEGER PRIMARY KEY,
             key TEXT NOT NULL,
             value TEXT,
-            group TEXT,
+            key_group TEXT,
             updated TEXT DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE (key, group)
+            UNIQUE (key, key_group)
         )''')
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS discussions (

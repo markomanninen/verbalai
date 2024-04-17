@@ -1,6 +1,4 @@
 numpy
-transformers
-torch
 pyyaml
 scikit-learn
 termcolor

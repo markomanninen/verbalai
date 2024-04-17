@@ -9,9 +9,5 @@ openai
 flask
 werkzeug
 annoy
-numpy
 transformers
 torch
-pyyaml
-scikit-learn
-termcolor

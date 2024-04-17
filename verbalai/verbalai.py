@@ -271,8 +271,7 @@ def invert_text(text):
 def find_discussions(kwargs):
     try:
         discussions = vector_db.find_discussions(**kwargs)
-        return f"\n\n{[{key: (", ".join([category["name"] for category in value]) if key == "categories" else value) for key, value in vector_db.retrieve_discussion_by_id(id).items() if key in ["discussion_id", "starttime", "title", "categories"]} for id in discussions]}. Format in markdown table format starting with id.", True
-        #return f"\n\n{[vector_db.retrieve_discussion_by_id(id) for id in discussions]}. Format in markdown table format starting with id.", True
+        return f"\n\n{[{'discussion_id': value['discussion_id'], 'starttime': value['starttime'], 'title': value['title'], 'categories': ', '.join([category['name'] for category in value['categories']])} for id in discussions for value in [vector_db.retrieve_discussion_by_id(id)] if 'categories' in value]}", True
     except Exception as e:
         return f"There was a problem on finding the discussions; {e}", False
 
@@ -280,8 +279,7 @@ def find_discussions(kwargs):
 def find_dialogue_units(kwargs):
     try:
         dialogues, distances = vector_db.find_dialogue_units(**kwargs)
-        return f"\n\n{[{key: (value[:40]+("..." if len(value)>40 else "") if key in ["prompt", "response"] else value) for key, value in vector_db.retrieve_dialogue_unit_by_id(id).items() if key in ["dialogue_unit_id", "timestamp", "prompt", "response"]} for id in dialogues]}. Format in markdown table format starting with id.", True
-        #return f"\n\n{[vector_db.retrieve_dialogue_unit_by_id(id) for id in dialogues]}. Format in markdown table format starting with id.", True
+        return f"\n\n{[{key: (value[:40] + ('...' if len(value) > 40 else '')) if key in ['prompt', 'response'] else value for key, value in vector_db.retrieve_dialogue_unit_by_id(id).items() if key in ['dialogue_unit_id', 'timestamp', 'prompt', 'response']} for id in dialogues]}. Format in markdown table format starting with id.", True
     except Exception as e:
         return f"There was a problem on finding the dialogue units; {e}", False
 
