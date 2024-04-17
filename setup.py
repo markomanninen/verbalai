@@ -18,18 +18,24 @@ setup(
         'openai',
         'flask',
         'werkzeug',
-        'annoy',
-        'numpy',
-        'transformers',
-        'torch',
-        'termcolor',
-        'pyyaml',
-        'scikit-learn'
+        'annoy'
     ],
     extras_require={
+        # TODO: Deepgram requires the following packages to be installed already
         'mp3': [
             'pyaudio',
-            'pydub',
+            'pydub'
+        ],
+        # Packaged for tool chain, Claude tools and model training libraries
+        # These are axperimental and not implemented in the verbalai run flow at the moment
+        # but there are tests that can be run with the trained intent prediction model
+        'dev': [
+            'numpy',
+            'transformers',
+            'torch',
+            'pyyaml',
+            'scikit-learn',
+            'termcolor'
         ]
     },
     entry_points={
