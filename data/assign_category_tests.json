@@ -10,6 +10,137 @@
     }
   },
   {
+    "prompt": "Tag the current thread with 'Ancient History' and give it a score of 0.85.",
+    "args": {
+      "discussion_id": "current",
+      "category": {
+        "name": "Ancient History",
+        "score": 0.85
+      }
+    }
+  },
+  {
+    "prompt": "For the discussion previously mentioned, categorize it under 'Sustainable Living' with a 0.9 score.",
+    "args": {
+      "discussion_id": "previous",
+      "category": {
+        "name": "Sustainable Living",
+        "score": 0.9
+      }
+    }
+  },
+  {
+    "prompt": "I'd like to label the first conversation we had as 'Quantum Computing', scoring it at 0.65.",
+    "args": {
+      "discussion_id": "first",
+      "category": {
+        "name": "Quantum Computing",
+        "score": 0.65
+      }
+    }
+  },
+  {
+    "prompt": "Assign 'World Politics' category with a 0.88 score to the discussion that happened last.",
+    "args": {
+      "discussion_id": "last",
+      "category": {
+        "name": "World Politics",
+        "score": 0.88
+      }
+    }
+  },
+  {
+    "prompt": "Can you tag the most recent discussion with 'Artificial Intelligence' and rate its relevance as 0.95?",
+    "args": {
+      "discussion_id": "newest",
+      "category": {
+        "name": "Artificial Intelligence",
+        "score": 0.95
+      }
+    }
+  },
+  {
+    "prompt": "Set the category of the earliest dialogue to 'Philosophy' and assign it a score of 0.7, please.",
+    "args": {
+      "discussion_id": "earliest",
+      "category": {
+        "name": "Philosophy",
+        "score": 0.7
+      }
+    }
+  },
+  {
+    "prompt": "Update the active discussion's category to 'Climate Change' with a significance score of 0.92.",
+    "args": {
+      "discussion_id": "active",
+      "category": {
+        "name": "Climate Change",
+        "score": 0.92
+      }
+    }
+  },
+  {
+    "prompt": "Let's mark the ongoing conversation with the 'Blockchain' category and a confidence score of 0.83.",
+    "args": {
+      "discussion_id": "active",
+      "category": {
+        "name": "Blockchain",
+        "score": 0.83
+      }
+    },
+    "comment": "The 'active' discussion is assumed to be the ongoing conversation."
+  },
+  {
+    "prompt": "Categorize the previous session under 'Educational Reform' and apply a score of 0.78 to it.",
+    "args": {
+      "discussion_id": "previous",
+      "category": {
+        "name": "Educational Reform",
+        "score": 0.78
+      }
+    }
+  },
+  {
+    "prompt": "Could you please tag our newest discussion as 'Digital Marketing' with a relevance of 0.89?",
+    "args": {
+      "discussion_id": "newest",
+      "category": {
+        "name": "Digital Marketing",
+        "score": 0.89
+      }
+    }
+  },
+  {
+    "prompt": "In the last thread, assign 'Mental Health' as the category and set its score to 0.81.",
+    "args": {
+      "discussion_id": "last",
+      "category": {
+        "name": "Mental Health",
+        "score": 0.81
+      }
+    }
+  },
+  {
+    "prompt": "Tag the oldest conversation with 'Space Exploration' and assign a relevance level of 0.74.",
+    "args": {
+      "discussion_id": "oldest",
+      "category": {
+        "name": "Space Exploration",
+        "score": 0.74
+      }
+    }
+  },
+  {
+    "prompt": "The featured discussion should be labeled 'Cybersecurity' with a score indicating 0.96 relevance.",
+    "args": {
+      "discussion_id": "featured",
+      "category": {
+        "name": "Cybersecurity",
+        "score": 0.96
+      }
+    }
+  },
+  {
     "prompt": "Designate the 'Creative Writing' category to our first discussion, rating its relevance at 0.8.",
     "args": {
       "discussion_id": "first",
@@ -30,9 +161,41 @@
     }
   },
   {
-    "prompt": "Assign to the discussion we labeled as '3' the category 'Renewable Energy' with a relevance score of 0.87.",
+    "prompt": "I want to add 'Nutrition Science' as a category to the discussion numbered 789, with a 0.82 score.",
     "args": {
-      "discussion_id": 3,
+      "discussion_id": 789,
+      "category": {
+        "name": "Nutrition Science",
+        "score": 0.82
+      }
+    }
+  },
+  {
+    "prompt": "Classify the conversation from yesterday as 'Urban Planning' and assess its relevance at 0.76.",
+    "args": {
+      "discussion_id": "latest",
+      "category": {
+        "name": "Urban Planning",
+        "score": 0.76
+      }
+    },
+    "comment": "The 'latest' discussion is assumed to be the conversation from yesterday."
+  },
+  {
+    "prompt": "Could the session before the last one be categorized under 'Biotechnology' with a score of 0.84?",
+    "args": {
+      "discussion_id": "previous",
+      "category": {
+        "name": "Biotechnology",
+        "score": 0.84
+      }
+    },
+    "comment": "The 'previous' discussion is assumed to be the session before the last one."
+  },
+  {
+    "prompt": "Assign to the discussion we labeled as '321' the category 'Renewable Energy' with a relevance score of 0.87.",
+    "args": {
+      "discussion_id": 321,
       "category": {
         "name": "Renewable Energy",
         "score": 0.87
