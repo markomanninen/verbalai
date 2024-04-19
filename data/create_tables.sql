@@ -1,10 +1,20 @@
+CREATE TABLE IF NOT EXISTS data (
+    id INTEGER PRIMARY KEY,
+    key TEXT NOT NULL,
+    value TEXT,
+    key_group TEXT,
+    updated TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (key, key_group)
+);
+
 CREATE TABLE IF NOT EXISTS discussions (
     id INTEGER PRIMARY KEY,
     session_id TEXT UNIQUE NOT NULL,
     title TEXT,
     starttime TEXT DEFAULT CURRENT_TIMESTAMP,
     endtime TEXT,
-    featured INTEGER default 0
+    featured INTEGER default 0,
+    cost REAL default 0.0
 );
 
 CREATE TABLE IF NOT EXISTS dialogue_units (

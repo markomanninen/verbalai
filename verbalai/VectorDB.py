@@ -4,6 +4,8 @@ from annoy import AnnoyIndex
 from transformers import AutoTokenizer, AutoModel
 import torch
 import os
+import pytz
+from datetime import datetime, timezone
 
 from .SessionManager import SessionManager
 # Load environment variables
@@ -15,8 +17,23 @@ from verbalai import log_config
 import logging
 logger = logging.getLogger(__name__)
 
-def parse_score_condition(condition):
-    """Parse a score condition string into an operator and a value."""
+def get_timezone_offset(tz_name):
+    """
+    Returns the timezone offset in minutes from UTC for a given timezone name.
+
+    :param tz_name: String, the name of the timezone (e.g., 'Europe/Helsinki')
+    :return: int, offset in minutes from UTC
+    """
+    tz = pytz.timezone(tz_name)
+    # Using now() to get the current datetime might bring DST into consideration
+    now_utc = datetime.now(timezone.utc)
+    now_tz = now_utc.astimezone(tz)
+    # Offset in minutes
+    return int(now_tz.utcoffset().total_seconds() / 60)
+
+
+def parse_condition(condition):
+    """Parse a condition string into an operator and a value."""
     # Default operator and value
     operator = '='
     value = condition
@@ -43,19 +60,34 @@ def parse_score_condition(condition):
     
     return operator, 1.0 if value > 1.0 else (0.0 if value < 0.0 else value)
 
+def parse_score_condition(condition):
+    """Parse a score condition string into an operator and a value."""
+    return parse_condition(condition)
+
+
+def parse_cost_condition(condition):
+    """Parse a cost condition string into an operator and a value."""
+    return parse_condition(condition)
+
 class VectorDB:
     """ A Python class for storing and searching vectors using SQLite and Annoy. """
     
-    def __init__(self, db_path='verbalai_db.sqlite', index_path='verbalai_db.ann', model_name='sentence-transformers/all-MiniLM-L6-v2', embedding_dim=384):
+    def __init__(self, db_path='verbalai_db.sqlite', index_path='verbalai_db.ann', model_name='sentence-transformers/all-MiniLM-L6-v2', embedding_dim=384, timezone="Europe/Helsinki"):
         """ Initialize the VectorDB class. """
         self.db_path = db_path
+        # Vector db (annay) attributes
         self.index_path = index_path
         self.embedding_dim = embedding_dim
         self.model_name = model_name
+        # SQLite is not so good with timezones
+        # We need to adjust datetimes in each relevant query
+        self.timezone = timezone
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         self.model = AutoModel.from_pretrained(self.model_name)
         self.index = AnnoyIndex(self.embedding_dim, 'angular')
+        # To determine, if dialogue unit indexing should be done in the clean up process
         self.new_data_added = False
+        # Discussion / session related attributes
         self.session_id = None
         self.previous_discussion = None
         self.current_discussion_id = None
@@ -100,6 +132,41 @@ class VectorDB:
         cursor.execute("SELECT id FROM discussions ORDER BY RANDOM() LIMIT 1")
         row = cursor.fetchone()
         return row[0] if row else 0
+    
+    def retrieve_data_entry(self, field, value):
+        """ Retrieve a data entry from the database. """
+        cursor = self.conn.cursor()
+        if field in ["id", "key", "key_group"]:
+            cursor.execute(f'SELECT key, value FROM data WHERE {field} = ?', (value,))
+        else:
+            raise ValueError("Invalid field provided. Use 'id', 'key', or 'key_group'.")
+        return [{"key": row[0], "value": row[1]} for row in cursor.fetchall()]
+    
+    def upsert_data_entry(self, key, value, key_group):
+        """ Insert or update a data entry in the database. """
+        cursor = self.conn.cursor()
+        # Update is done via primary key (id) or unique key (key, key_group) conflict check
+        cursor.execute('INSERT OR REPLACE INTO data (key, value, key_group, updated) VALUES (?, ?, ?, CURRENT_TIMESTAMP)', (key, value, key_group))
+        self.conn.commit()
+    
+    def update_discussion_cost(self, cost):
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE discussions SET cost = ? WHERE id = ?", (cost, self.current_discussion_id))
+        self.conn.commit()
+    
+    def retrieve_last_discussion_summaries(self, max_results=3):
+        # SQL to retrieve last three dialogues with 'summary' intent
+        cursor = self.conn.cursor()
+        sql_query = '''
+            SELECT du.prompt
+            FROM dialogue_units AS du
+            WHERE du.intent = 'create_summary'
+            ORDER BY du.timestamp DESC
+            LIMIT ?
+        '''
+        params = (max_results, )
+        cursor.execute(sql_query, params)
+        return "\n\n".join([row[0] for row in cursor.fetchall()])
     
     def check_tables_exist(self):
         """Check if the key tables exist in the database to determine if initialization is needed."""
@@ -152,7 +219,8 @@ class VectorDB:
             title TEXT,
             starttime TEXT DEFAULT CURRENT_TIMESTAMP,
             endtime TEXT,
-            featured INTEGER default 0
+            featured INTEGER default 0,
+            cost REAL default 0.0
         )''')
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS dialogue_units (
@@ -409,7 +477,7 @@ class VectorDB:
                     #    break
             return filtered_ids, filtered_distances
 
-    def find_discussions(self, title=None, starttime_start=None, endtime_start=None, starttime_end=None, endtime_end=None, category=None, limit=5, offset_page=0, order_by="starttime", order_direction="ASC", featured=None):
+    def find_discussions(self, title=None, starttime_start=None, endtime_start=None, starttime_end=None, endtime_end=None, category=None, limit=5, offset_page=0, order_by="starttime", order_direction="ASC", featured=None, cost=None):
         """
         Finds discussions based on specified filters such as title, time range, and category.
         Allows for independent specification of start and end times.
@@ -455,13 +523,19 @@ class VectorDB:
                 condition, value = parse_score_condition(category["score"])
                 conditions.append(f"c.score {condition} ?")
                 params.append(value)
+        
+        # Cost filter
+        if cost:
+            condition, value = parse_cost_condition(cost)
+            conditions.append(f"d.cost {condition} ?")
+            params.append(value)
 
         # Adding WHERE conditions
         if conditions:
             sql_query += " WHERE " + " AND ".join(conditions)
 
         # Ordering
-        order_by_valid_fields = ["title", "starttime", "endtime", "featured"]
+        order_by_valid_fields = ["title", "starttime", "endtime", "featured", "cost"]
         if order_by in order_by_valid_fields:
             sql_query += f" ORDER BY d.{order_by} {order_direction.upper()}"
 
@@ -623,7 +697,7 @@ class VectorDB:
         """Retrieve discussion by ID along with the count of associated dialogue units."""
         cursor = self.conn.cursor()
         # Retrieve the main discussion details
-        cursor.execute('SELECT starttime, title, endtime, featured FROM discussions WHERE id = ?', (discussion_id,))
+        cursor.execute('SELECT starttime, title, endtime, featured, cost FROM discussions WHERE id = ?', (discussion_id,))
         discussion = cursor.fetchone()
 
         if discussion:
@@ -640,6 +714,7 @@ class VectorDB:
                 "title": discussion[1],
                 "endtime": discussion[2],
                 "featured": bool(discussion[3]),
+                "cost": discussion[4],
                 "dialogue_unit_count": dialogue_unit_count,
                 "categories": categories
             }
@@ -678,7 +753,7 @@ class VectorDB:
             
             # Retrieve discussion
             discussion_id = dialogue_unit[4]
-            cursor.execute('SELECT starttime, title, endtime, featured FROM discussions WHERE id = ?', (discussion_id,))
+            cursor.execute('SELECT starttime, title, endtime, featured, cost FROM discussions WHERE id = ?', (discussion_id,))
             discussion_row = cursor.fetchone()
             discussion = { 
                 "discussion_id": discussion_id, 
@@ -686,6 +761,7 @@ class VectorDB:
                 "title": discussion_row[1], 
                 "endtime": discussion_row[2],
                 "featured": discussion_row[3],
+                "cost": discussion_row[4],
                 "categories": self.retrieve_categories(discussion_id)
             }
 
@@ -702,74 +778,95 @@ class VectorDB:
         else:
             raise ValueError(f"No dialogue unit found with ID: {dialogue_unit_id}")
 
-    def retrieve_statistics(self, stat_type="count", dimension="topic", **filters):
-        """
-        Retrieves statistical data based on the specified type, dimension, and filters.
-        
-        :param stat_type: Type of statistic to retrieve ('count', 'average', 'sum').
-        :param dimension: Dimension to calculate the statistic on ('topic', 'intent', 'timestamp', 'sentiment', 'category', 'entity').
-        :param filters: Additional filters to apply (e.g., topic, intent, time range, sentiment, category, entity).
-        :return: A dictionary containing the statistical data.
-        """
-        cursor = self.conn.cursor()
-        statistics = {}
-        base_query = "SELECT {}, {} FROM dialogue_units e"
-        join_clause = ""
-        where_clause = " WHERE 1=1 "
-        group_by_clause = " GROUP BY {}"
-        params = []
+    def retrieve_statistics(self, aggregation_type="count", aggregation_entity="topic", aggregation_grouping=None, **filters):
+        try:
+            # Validate input parameters
+            valid_dimensions = ["topic", "intent", "timestamp", "sentiment", "category", "cost", "discussion_id", "dialogue_unit_id"]
+            valid_stats = ["count", "average", "sum", "minimum", "maximum"]
+            valid_filters = ["topic", "intent", "starttime", "endtime", "category"]
 
-        # Determine the aggregation function and field based on stat_type and dimension
-        if stat_type.lower() == "count_sessions":
-            aggregation_function = "COUNT(DISTINCT e.discussion_id)"
-        elif stat_type.lower() == "count_intents":
-            aggregation_function = "COUNT(DISTINCT e.intent)"
-        else:
-            aggregation_function = "COUNT" if stat_type.lower() == "count" else "AVG"
-        aggregation_field = "e.id"
+            # Valid groups are valid dimensions
+            if not all([aggregation_entity in valid_dimensions, aggregation_type.lower() in valid_stats, aggregation_grouping in valid_dimensions or aggregation_grouping is None]):
+                raise ValueError("Invalid aggregation type, entity, or group provided")
+            
+            if not all(k.lower() in valid_filters for k in filters.keys()):
+                raise ValueError("Invalid filters provided")
 
-        # Apply filters
-        if ("starttime" in filters and filters["starttime"]) or ("endtime" in filters and filters["endtime"]):
-            if filters["starttime"] and filters["endtime"]:
-                where_clause += " AND e.timestamp BETWEEN ? AND ?"
-                params.extend([filters["starttime"].replace("T", " "), filters["endtime"].replace("T", " ")])
-            elif filters["starttime"]:
-                where_clause += " AND e.timestamp > ?"
-                params.extend([filters["starttime"].replace("T", " ")])
-            elif filters["endtime"]:
-                where_clause += " AND e.timestamp < ?"
-                params.extend([filters["endtime"].replace("T", " ")])
+            # Setup database cursor and initial SQL components
+            cursor = self.conn.cursor()
+            base_query = "SELECT {}{} FROM dialogue_units e"
+            join_clause = " JOIN discussions d ON e.discussion_id = d.id"
+            where_clause = " WHERE 1=1"
+            group_by_clause = " GROUP BY {}"
+            params = []
+            
+            # Timezone corrected timestamp field for datetime fields
+            offset_minutes = get_timezone_offset(self.timezone)
+            timestamp_field = f"strftime('%Y-%m-%dT%H:%M:%S', datetime(e.timestamp, '{int(offset_minutes)} minutes'))"
+            
+            aggregation_and_group_fields = {
+                "dialogue_unit_id": "e.id",
+                "cost": "d.cost",
+                "intent": "e.intent",
+                "discussion_id": "e.discussion_id",
+                "timestamp": f"DATE({timestamp_field})",
+                "sentiment": "(ss.positive_score - ss.negative_score)",
+                "category": "c.name",
+                "topic": "t.name"
+            }
+            # Determine the field for aggregation
+            aggregation_field = aggregation_and_group_fields[aggregation_entity]
 
-        
-        join_clause += """
-        JOIN discussion_unit_topics dut ON e.id = dut.discussion_id
-        JOIN topics t ON dut.topic_id = t.id
-        """
-        
-        if "topic" in filters and filters["topic"]:
-            where_clause += " AND t.name = ?"
-            params.append(filters["topic"])
+            # Set group by field, default to aggregation field if group_by is not specified
+            group_by_field = aggregation_and_group_fields[aggregation_grouping] if aggregation_grouping and aggregation_field != aggregation_entity else None
+            
+            # Adjust joins based on required dimensions
+            # NOTE: None checks (filters["sentiment"] != None) prevents limiting
+            # results in joined tables in which there exists discussions/dialogue units
+            if aggregation_entity == "sentiment" or ("sentiment" in filters and filters["sentiment"]):
+                join_clause += " JOIN sentiment_scores ss ON e.id = ss.dialogue_unit_id"
+            if aggregation_entity == "category" or ("category" in filters and filters["category"]):
+                join_clause += " JOIN categories c ON d.id = c.discussion_id"
+            if aggregation_entity == "topic" or ("topic" in filters and filters["topic"]):
+                join_clause += " JOIN dialogue_unit_topics dut ON e.id = dut.dialogue_unit_id JOIN topics t ON dut.topic_id = t.id"
 
-        if "intent" in filters and filters["intent"]:
-            where_clause += " AND e.intent = ?"
-            params.append(filters["intent"])
+            # Construct SQL aggregation function
+            aggregation_function = {
+                "count": "COUNT(DISTINCT {})",
+                "average": "AVG({})",
+                "sum": "SUM({})",
+                "minimum": "MIN({})",
+                "maximum": "MAX({})"
+            }[aggregation_type.lower()].format(aggregation_field)
 
-        # Adjust query based on requested dimension
-        if dimension == "topic":
-            dimension_field = "t.name"
-        elif dimension in ["intent"]:
-            dimension_field = f"e.{dimension}"
-        elif dimension == "timestamp":
-            dimension_field = "DATE(e.timestamp)"
-        elif dimension == "discussion":
-            dimension_field = "e.discussion_id"
-        else:
-            dimension_field = "1"
+            # Apply filters
+            # NOTE: starttime and endtime filter fileds in discussions table are not supported
+            if "starttime" in filters and filters["starttime"]:
+                where_clause += f" AND {timestamp_field} >= ?"
+                params.append(filters["starttime"])
+            if "endtime" in filters and filters["endtime"]:
+                where_clause += f" AND {timestamp_field} <= ?"
+                params.append(filters["endtime"])
+            if "topic" in filters and filters["topic"]:
+                where_clause += " AND t.name = ?"
+                params.append(filters["topic"])
+            if "category" in filters and filters["category"]:
+                where_clause += " AND c.name = ?"
+                params.append(filters["category"])
+            if "intent" in filters and filters["intent"]:
+                where_clause += " AND e.intent = ?"
+                params.append(filters["intent"])
 
-        query = base_query.format(dimension_field, aggregation_function + "(" + aggregation_field + ")") + join_clause + where_clause + group_by_clause.format(dimension_field)
+            # Construct full SQL query
+            query = base_query.format((f"{group_by_field}, " if group_by_field else ""), aggregation_function) + join_clause + where_clause + (group_by_clause.format(group_by_field) if group_by_field else "")
+            # Logging the final query and parameters
+            logging.info("Executing SQL Query: %s", query)
+            logging.info("With parameters: %s", params)
 
-        # Execute the query and return results
-        cursor.execute(query, params)
-        statistics = {row[0]: row[1] for row in cursor.fetchall()}
-
-        return statistics
+            # Execute the query and return results
+            cursor.execute(query, params)
+            #statistics = {row[0]: row[1] for row in cursor.fetchall()}
+            return cursor.fetchall()
+        except Exception as e:
+            logging.error("Failed to retrieve statistics: %s", str(e))
+            raise

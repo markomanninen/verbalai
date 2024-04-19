@@ -18,18 +18,15 @@ from openai import OpenAI
 from colorama import init, Fore, Style, Back
 # Library imports
 from .prompts import (
-    short_mode,
-    long_mode,
     previous_context,
     system_message,
-    system_message_tools,
     summary_generator_prompt,
     system_message_metadata,
-    system_message_find_database,
-    system_message_find_database_entry,
-    system_message_database_statistic,
+    render_selected_schemas,
+    system_message_metadata_schema,
     system_message_tools_human_format,
-    system_message_metadata_without_tools
+    system_message_metadata_tools_epilogue,
+    system_message_metadata_schema_tools_part
 )
 from .audio_stream_server import ServerThread
 from .deepgramio import DeepgramIO
@@ -148,9 +145,6 @@ openai_models = [
     "gpt-3.5-turbo-16k-0613"
 ]
 
-# Flag to indicate whether to use function calling tools or not
-use_function_calling_tools = False
-
 # Command extraction model
 command_extraction_model = "claude-3-haiku-20240307"
 
@@ -236,11 +230,16 @@ audio_host = "127.0.0.1"
 audio_port = 5000
 audio_stream = False
 
+# Deepgram streaming settings
+use_deepgram_streamer = False
 deepgram_streamer = None
 
-use_deepgram_streamer = False
-
+# GPT API token cost calculator
 gpt_token_calculator = None
+
+# Summary generator settings
+summary_index = 0
+summary_message_count = 10
 
 ###################################################
 # CONSOLE MAGIC
@@ -267,11 +266,27 @@ def invert_text(text):
 # COGNITIVE MODEL CALLBACKS
 ###################################################
 
+def retrieve_data_entry(kwargs):
+    try:
+        # Either single entry of group of entries are returned
+        result = vector_db.retrieve_data_entry(**kwargs)
+        return f"Data entry details: {result}", True
+    except Exception as e:
+        return f"There was a problem on retrieving the data entry; {e}", False
+
+
+def upsert_data_entry(kwargs):
+    try:
+        vector_db.upsert_data_entry(**kwargs)
+        return f"Data entry has been modified successfully.", True
+    except Exception as e:
+        return f"There was a problem on updating the data entry; {e}", False
+
 
 def find_discussions(kwargs):
     try:
         discussions = vector_db.find_discussions(**kwargs)
-        return f"\n\n{[{'discussion_id': value['discussion_id'], 'starttime': value['starttime'], 'title': value['title'], 'categories': ', '.join([category['name'] for category in value['categories']])} for id in discussions for value in [vector_db.retrieve_discussion_by_id(id)] if 'categories' in value]}", True
+        return f"\n\n{[{'discussion_id': value['discussion_id'], 'starttime': value['starttime'], 'title': value['title'], 'categories': ', '.join([category['name'] for category in value['categories']])} for id in discussions for value in [vector_db.retrieve_discussion_by_id(id)] if 'categories' in value]}. Format in markdown table format starting with id.", True
     except Exception as e:
         return f"There was a problem on finding the discussions; {e}", False
 
@@ -299,6 +314,14 @@ def retrieve_dialogue_unit_by_id(kwargs):
         return f"Dialogue unit details: {dialogue}", True
     except Exception as e:
         return f"There was a problem on retrieving the dialogue unit; {e}", False
+
+
+def retrieve_discussion_statistics(kwargs):
+    try:
+        statistics = vector_db.retrieve_statistics(**kwargs)
+        return f"Rows ({len(statistics)}): {statistics}", True
+    except Exception as e:
+        return f"There was a problem on retrieving statistics; {e}", False
 
 
 def remove_category(kwargs):
@@ -338,7 +361,10 @@ callbacks = {
     "retrieve_dialogue_unit_by_id": lambda kwargs: retrieve_dialogue_unit_by_id(kwargs),
     "retrieve_discussion_by_id": lambda kwargs: retrieve_discussion_by_id(kwargs),
     "find_discussions": lambda kwargs: find_discussions(kwargs),
-    "find_dialogue_units": lambda kwargs: find_dialogue_units(kwargs)
+    "find_dialogue_units": lambda kwargs: find_dialogue_units(kwargs),
+    "retrieve_discussion_statistics": lambda kwargs: retrieve_discussion_statistics(kwargs),
+    "upsert_data_entry": lambda kwargs: upsert_data_entry(kwargs),
+    "retrieve_data_entry": lambda kwargs: retrieve_data_entry(kwargs)
 }
 
 
@@ -372,8 +398,6 @@ def prompt(text, final=False):
                             and user information.
     - messages (list): The history of messages in the chat, both from the user and the 
                        system.
-    - short_mode (str): The operation mode for non-final inputs.
-    - long_mode (str): The operation mode for final inputs.
     - username (str): The name of the user in the chat.
     - response_token_limit (int): The maximum number of tokens for a final response.
     - feedback_token_limit (int): The maximum number of tokens for a non-final feedback 
@@ -384,9 +408,10 @@ def prompt(text, final=False):
     - str: The generated response to the input text, for logging or further processing.
     """
     
-    global gpt_token_calculator, inference_message_word_count, gpt_model, system_message, system_message_tools, messages, short_mode, long_mode, username, response_token_limit, feedback_token_limit, voice_model_id, elevenlabs_streamer, disable_voice_output, verbose, deepgram_streamer, deepgram_voice_id, system_message_find_database, system_message_find_database_entry, system_message_database_statistic, command_extraction_model, tool_chain, low_confidence_threshold, intent_model_path, use_function_calling_tools, system_message_tools_human_format
+    global gpt_token_calculator, inference_message_word_count, gpt_model, system_message, messages, username, response_token_limit, feedback_token_limit, voice_model_id, elevenlabs_streamer, disable_voice_output, verbose, deepgram_streamer, deepgram_voice_id, command_extraction_model, low_confidence_threshold, intent_model_path, system_message_tools_human_format
     
-    text = text.strip()
+    # Limit input to 4k chars
+    text = text.strip()[:4096]
     
     inference_message_word_count += len(text.split(" "))
     
@@ -412,10 +437,16 @@ def prompt(text, final=False):
         sentiment = metadata.get("sentiment", {})
         intent = metadata.get("intent", "")
         tools = metadata.get("tools", [])
+        # There is a change that part of the tools require information
+        # but some do not, so this flag should not prevent the complete tools
+        # to be excluded from execution. Better name would be:
+        # system_requires_more_information_to_execute_any_of_the_tools i.e.e none of the
+        # tools can not be executed without more information...
+        system_requires_more_information_to_use_tools = metadata.get("system_requires_more_information_to_use_tools", True)
     
     logger.info(metadata)
 
-    if final and use_function_calling_tools and tools:
+    if final and tools:
         
         # If tools are found, use them to infer extra content to the messages
         
@@ -427,9 +458,52 @@ def prompt(text, final=False):
         # tools. Also, intent, sentiment, and topics are redundant in the latter tools so the 
         # metadata retrieval system prompt might benefit on being different compared to the initial one
         print("")
-        for entry in tools:
+        for i, entry in enumerate(tools):
             
-            tool, args = entry["tool"], entry["arguments"]
+            # TODO: Previous tool relation has not been implemented yet
+            tool, args, arguments_relies_on_previous_tool_results, details_are_missing = \
+                entry["tool"], entry["arguments"], entry["arguments_relies_on_previous_tool_results"], entry["details_are_missing"]
+            
+            if details_are_missing:
+                print(f"{Fore.MAGENTA}✗ Tool #{i} '{tool}' requires more information to be used.\n")
+                break
+            
+            if arguments_relies_on_previous_tool_results:
+                # Load new metadata with the previous tool results collected in the messages
+                
+                # TODO: It might be possible to strealine this process by retrieving only the necessary arguments
+                # instead of calling whole metaata retrieval, but on the other hand, the previous context and results
+                # needs to be provided because the following tool execution depends on the previous results
+                # which needs to contain both the original prompt and the medioric results
+                messages[-1]["content"].append({"type": "text", "text": f"Skip arguments and tools if the preconditions given by the user are not met in the previous system output results."})
+                
+                new_metadata = gpt_retrieve_metadata(messages[-5:])
+                logger.info(f"New metadata: {new_metadata}")
+                # Skip the tool if preconditions are not met
+                if not new_metadata or new_metadata["skip_tools_due_to_unsatisfied_preconditions_found_from_previous_tool_results_and_user_specifications"]:
+                    break
+                new_tools = new_metadata.get("tools", [])
+                # Only a single new tool is allowed
+                # There is a potential infinite loop if there are multiple tools
+                # and they could always refer to previous tools results
+                # TODO: tool index (i) could be uuid instead of index?
+                # in such way we could match the right tool here rather than
+                # ambiguous check of the first or i:th tool...
+                new_tool = {}
+                if len(new_tools) > 0:
+                    if len(new_tools) - 1 >= i and new_tools[i]["tool"] == tool:
+                        new_tool = new_tools[i]
+                    if new_tools[0]["tool"] == tool:
+                        new_tool = new_tools[0]
+                if new_tool:
+                    # Skip the tool?
+                    if new_metadata["system_requires_more_information_to_use_tools"] or new_tool["details_are_missing"]:
+                        break
+                    # There should be new arguments instead of the original old arguments, that can be used to call the tool
+                    args = new_tool["arguments"]
+                else:
+                    # If new tool is not found or there is a mismatch, the tool will be skipped altogether
+                    break
             
             success = False
             response = ""
@@ -441,10 +515,14 @@ def prompt(text, final=False):
                     # Call the callback function for the tool
                     tool_answer, success = callbacks[predicted_tool](args)
                     
-                    logger.info(f"Tool '{predicted_tool}' response ({success}): '{tool_answer}'.")
+                    logger.info(f"Tool #{i} '{predicted_tool}' response ({success}): '{tool_answer}'.")
                     
-                    assistant_message = f"Calling tool: {predicted_tool}. Input: {args}"
-                    user_message = f"User role: tool. Output: {tool_answer}"
+                    # Sometimes chat hallusinates the assistent message in a form of the below
+                    # message. As a workaround, I'll pass just general information that
+                    # the tool has been called and the system is waiting for the output.
+                    #assistant_message = f"Calling tool: {predicted_tool}. Input: {args}"
+                    assistant_message = f"Called tool #{i} with given arguments. Waiting for output..."
+                    user_message = f"User role: system. Output: {tool_answer}"
                     # Note: Tool schema words count is not included
                     inference_message_word_count += len(assistant_message.split(" "))
                     inference_message_word_count += len(user_message.split(" "))
@@ -457,25 +535,26 @@ def prompt(text, final=False):
                         {
                             "role": "user",
                             "content": [
-                                {"type": "text", "text": user_message}
+                                # Limit input to 4k chars
+                                {"type": "text", "text": user_message[:4096]}
                             ]
                         }
                     ]
                     
                     if success:
-                        print(f"{Fore.YELLOW}✓ Tool {predicted_tool} activated and request succeed.\n")
+                        print(f"{Fore.YELLOW}✓ Tool #{i} {predicted_tool} called.\n")
                     else:
-                        response = f"Error executing tool: {predicted_tool}; {tool_answer}"
+                        response = f"Error executing tool #{i}: {predicted_tool}; {tool_answer}"
                         print(f"{Fore.RED}✗ {response}\n")
                     
                     intent = predicted_tool
                     
                 except Exception as e:
-                    response = f"Error executing tool: {predicted_tool}; {e}"
+                    response = f"Error executing tool #{i}: {predicted_tool}; {e}"
                     print(f"\n{Fore.RED}✗ {response}\n")
                 
             else:
-                print(f"\n{Fore.YELLOW}? Tool not found: {predicted_tool}\n")
+                print(f"\n{Fore.YELLOW}? Tool #{i} not found: {predicted_tool}\n")
             
             # If tool processing succeeded, add the tool messages
             if tool_messages:
@@ -489,24 +568,15 @@ def prompt(text, final=False):
                     },
                     {
                         "role": "user", 
-                        "content": [{"type": "text", "text": f"User role: tool. Output: {response}"}]
+                        "content": [{"type": "text", "text": f"User role: system. Output: {response}"}]
                     }
                 ])
     
-    # Generate the system message with the current mode, username, datetime, and previous context
-    system = system_message.\
-        replace("<<mode>>", long_mode if final else short_mode).\
-        replace("<<tools>>", system_message_tools_human_format if use_function_calling_tools else "").\
-        replace("<<user>>", username).\
-        replace("<<datetime>>", time.strftime("%Y-%m-%d %H:%M:%S")).\
-        replace("<<previous_context>>", previous_context.\
-            replace("<<summary>>", summary) if summary else "").\
-        replace("<<discussion_id>>", str(vector_db.current_discussion_id)).\
-        replace("<<previous_discussion>>", str(vector_db.previous_discussion)).\
-        replace("<<first_discussion_date>>", vector_db.first_discussion_date)
+    # Generate the system message with the current datetime
+    system = system_message.replace("<<datetime>>", time.strftime("%Y-%m-%d %H:%M:%S"))
     
     # Log last 5 messages without index error
-    logger.info(messages[-min(len(messages), 5):])
+    #logger.info(messages[-min(len(messages), 5):])
     
     start_time = None
     @contextmanager
@@ -652,82 +722,53 @@ def gpt_retrieve_content(messages, system_message, max_tokens = 100, model = Non
         gpt_token_calculator.update_token_counts(message, model, result)
     return result
 
-# TODO: remove
-def loads_first_json_block(text):
-    # Initial counts and flags
-    brace_count = 0
-    in_string = False
-    escape = False
-    json_start = -1
-    json_end = -1
-
-    # Iterate over the text by index and character
-    for i, char in enumerate(text):
-        if char == '"' and not escape:
-            in_string = not in_string
-        elif char == '\\' and not escape:
-            escape = True
-            continue
-        elif char == '{' and not in_string:
-            if brace_count == 0:
-                json_start = i
-            brace_count += 1
-        elif char == '}' and not in_string:
-            brace_count -= 1
-            if brace_count == 0:
-                json_end = i + 1
-                break
-        escape = False
-
-    logger.info(f"Retrieved JSON block: {text}")
-    # Extract and parse the JSON string if braces match up
-    if json_start != -1 and json_end != -1:
-        json_string = text[json_start:json_end]
-        try:
-            logger.info(f"Extracted JSON: {json_string}")
-            return json.loads(json_string)
-        except Exception as e:
-            logger.error(f"Error extracting JSON: {e}")
-    else:
-        logger.warn("No JSON string found.")
-    
-    return {}
-
 
 def extract_and_parse_json_block(text):
+    """Extract and parse a the first JSON block that contains all metadata fields from a text string."""
+    stack = []
+    start_index = None
     results = []
-    # Regex to extract all {} enclosed blocks, handling nested structures
-    pattern = re.compile(r'\{(?:[^{}]*(?:\{(?:[^{}]*(?:\{[^{}]*\})*[^{}]*)*\})*[^{}]*)*\}')
-    blocks = pattern.findall(text)
-    for block in blocks:
-        try:
-            # Attempt to load the JSON block
-            parsed_json = json.loads(block)
-            # Check for required keys in the JSON
-            if all(map(lambda x: x in parsed_json, ['topics', 'sentiment', 'intent', 'tools'])):
-                results.append(parsed_json)
-        except json.JSONDecodeError:
-            # If decoding fails, skip this block
-            continue
-    return results[0] if len(results) == 1 else {}
+    # Iterate over each character in the text
+    for index, char in enumerate(text):
+        if char == '{':
+            # When we find an opening brace, push it to the stack
+            stack.append(char)
+            # Record where the JSON block starts if it's the first brace
+            if len(stack) == 1:
+                start_index = index
+        elif char == '}' and stack:
+            # When we find a closing brace, pop the last opening brace
+            stack.pop()
+            # If the stack is empty, we've found a complete JSON block
+            if not stack and start_index is not None:
+                # Extract the block from the start index to the current character
+                try:
+                    json_block = text[start_index:index + 1]
+                    # Attempt to parse the JSON block
+                    parsed_json = json.loads(json_block)
+                    # Append to results if parsing is successful
+                    results.append(parsed_json)
+                    # Reset start index for next potential JSON block
+                    start_index = None
+                except json.JSONDecodeError:
+                    # Handle cases where the block is not valid JSON
+                    continue
+    metadata_fields = ['topics','sentiment', 'intent', 'tools', 'system_requires_more_information_to_use_tools']
+    for result in results:
+        if all(map(lambda x: x in result, metadata_fields)):
+            return result
+    return {}
 
 
 def gpt_retrieve_metadata(messages):
     
-    global system_message_metadata, command_extraction_model, username, system_message_tools, use_function_calling_tools, system_message_metadata_without_tools
+    global system_message_metadata, command_extraction_model
     
     result = gpt_retrieve_content(
         messages, 
-        (system_message_metadata if use_function_calling_tools else system_message_metadata_without_tools).\
-            replace("<<tools>>", system_message_tools if use_function_calling_tools else "").\
-            replace("<<user>>", username).\
-            replace("<<datetime>>", time.strftime("%Y-%m-%d %H:%M:%S")).\
-            replace("<<discussion_id>>", str(vector_db.current_discussion_id)).\
-            replace("<<previous_discussion>>", str(vector_db.previous_discussion)).\
-            replace("<<first_discussion_date>>", vector_db.first_discussion_date), 
+        system_message_metadata.replace("<<datetime>>", time.strftime("%Y-%m-%d %H:%M:%S")),
         500,
-        # Claude 3 Sonnet LLM seems to work best with prompt with schema to arguments inference,
-        # but Haiku is much cheaper and works almost as well.
+        # Haiku is cheap and works surprisingly well.
         command_extraction_model
     )
     
@@ -803,6 +844,10 @@ def gpt_inference(text, final=False):
         # Convert the dictionary to a JSON string and write it to the file with a newline
         json_line = json.dumps(data) + "\n"
         file.write(json_line)
+    
+    # Let the create summary function handle if summary needs to be created
+    handle_summary_creation()
+    
     return True
 
 
@@ -905,6 +950,70 @@ def save_audio_to_file(audio_data, prefix="output", extension="mp3"):
 # THREADED WORKERS FOR SHORTCUT COMMANDS
 ###################################################
 
+def handle_summary_creation(final=False):
+    global messages, summary_index, summary_message_count
+    
+    # Determine the number of messages to summarize
+    # Calculate the number of messages to summarize
+    num_messages = len(messages)
+    if not final and (num_messages - summary_index) < summary_message_count:
+        #logger.info("Not enough messages to generate a summary yet.")
+        return  # Exit if not final and less than 10 messages since last summary
+
+    # Set end index for processing messages
+    end_index = num_messages if final else summary_index + summary_message_count
+    
+    # Extract the user's input and the system's responses from the messages
+    previous_context = ""
+    for i in range(summary_index, end_index):
+        message = messages[i]
+        role = message["role"]
+        content = message["content"]
+        text = " ".join([item["text"] for item in content if item["type"] == "text"])
+        if role == "user":
+            previous_context += f"User: {text}\n"
+        elif role == "assistant":
+            previous_context += f"Assistant: {text}\n"
+    
+    #logger.info(f"Previous context: {previous_context} {num_messages}, {summary_index}, {end_index}")
+    # Update summary_index for the next call
+    summary_index = end_index
+    
+    if previous_context:
+        try:
+            print(Fore.YELLOW + f"\nGenerating {"final " if final else ""}summary...", end="", flush=True)
+            # Generate a summary prompt with the previous context
+            with gpt_client.messages.stream(
+                model = gpt_model,
+                messages = [{
+                    "role": "user", 
+                    "content": [{"type": "text", "text": summary_generator_prompt.replace("<<summary>>", previous_context)}]
+                }],
+                max_tokens = 1024
+            ) as gpt_stream:
+                # Log the prompt, response, and metadata to a JSON Lines file
+                timestamp = time.strftime("%Y%m%d-%H%M%S")
+                filename = f"summary_{timestamp}.txt"
+                file_path = os.path.join(audio_recorder.session_dir, filename)
+                with open(file_path, "a") as file:
+                    summary = "".join(gpt_stream.text_stream)
+                    file.write(summary)
+                    vector_db.add_dialogue_unit(
+                        prompt=summary,
+                        response="",
+                        intent="create_summary"
+                    )
+                    # Update tokens used
+                    if gpt_model in anthropic_models:
+                        gpt_token_calculator.update_token_counts(gpt_stream.get_final_message(), gpt_model)
+                    
+                print(f" See the file: {file_path}." + Style.NORMAL)
+        except Exception as e:
+            logger.error(f" Error generating summary; {e}")
+    else:
+        logger.info("No more conversation history to summarize.")
+
+
 def summary_generator():
     """
     Generates a summary of the conversation from the messages stored in the chat history.
@@ -923,55 +1032,13 @@ def summary_generator():
     Returns:
     - str: The summary of the conversation based on the messages in the chat history.
     """
-    global messages, summary
     while True:
         # Block the thread until the keyboard shortcut is pressed
         keyboard.wait(hotkey_summarize)
-        
         audio_recorder.pause = True
         freeze_cursor()
-        
-        # Extract the user's input and the system's responses from the messages
-        previous_context = ""
-        for message in messages:
-            role = message["role"]
-            content = message["content"]
-            text = " ".join([item["text"] for item in content if item["type"] == "text"])
-            if role == "user":
-                previous_context += f"User: {text}\n"
-            elif role == "assistant":
-                previous_context += f"Assistant: {text}\n"
-        
-        if previous_context:
-            try:
-                print("Generating summary...", end="", flush=True)
-                # Generate a summary prompt with the previous context
-                with gpt_client.messages.stream(
-                    model = gpt_model,
-                    messages = [{
-                        "role": "user", 
-                        "content": [{"type": "text", "text": summary_generator_prompt.replace("<<summary>>", previous_context)}]
-                    }],
-                    max_tokens = 1024
-                ) as gpt_stream:
-                    # Log the prompt, response, and metadata to a JSON Lines file
-                    timestamp = time.strftime("%Y%m%d-%H%M%S")
-                    filename = f"summary_{timestamp}.txt"
-                    file_path = os.path.join(audio_recorder.session_dir, filename)
-                    with open(file_path, "a") as file:
-                        summary = "".join(gpt_stream.text_stream)
-                        file.write(summary)
-                        vector_db.add_dialogue_unit(
-                            summary, 
-                            "", 
-                            ["summary"]
-                        )
-                    print(f" See the file: {file_path}.")
-            except Exception as e:
-                logger.error(f" Error generating summary; {e}")
-        else:
-            print("No conversation history to summarize.")
-        
+        # Force create summary because the user have requested so
+        handle_summary_creation(final=True)
         audio_recorder.pause = False
         blink_cursor()
 
@@ -1272,7 +1339,7 @@ def main():
     - `-di`, `--disable_voice_recognition`: Disable voice recognition.
     - `-sf`, `--summary_file`: Import previous context for the discussion from the summary file.
     """
-    global gpt_token_calculator, audio_recorder, feedback_word_buffer_limit, voice_id, gpt_model, username, verbose, available_models, elevenlabs_streamer, phrase_time_limit, calibration_time, elevenlabs_output_format, disable_voice_output, disable_voice_recognition, summary, summary_file, elevenlabs_output_sample_rate, elevenlabs_output_bit_rate, audio_file_source, audio_recorder_type, audio_dir, audio_host, audio_port, audio_stream, deepgram_streamer, use_deepgram_streamer, session_id, tool_chain, intent_model_path, low_confidence_threshold, use_function_calling_tools, deepgram_voice_id
+    global gpt_token_calculator, audio_recorder, feedback_word_buffer_limit, voice_id, gpt_model, username, verbose, available_models, elevenlabs_streamer, phrase_time_limit, calibration_time, elevenlabs_output_format, disable_voice_output, disable_voice_recognition, summary, summary_file, elevenlabs_output_sample_rate, elevenlabs_output_bit_rate, audio_file_source, audio_recorder_type, audio_dir, audio_host, audio_port, audio_stream, deepgram_streamer, use_deepgram_streamer, session_id, intent_model_path, low_confidence_threshold, deepgram_voice_id, system_message_metadata, system_message_metadata_schema_tools_part, system_message_metadata_tools_epilogue, system_message_metadata_schema, system_message, system_message_tools_human_format
     
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Bidirectional Chat with Speech Recognition")
@@ -1328,7 +1395,7 @@ def main():
     
     parser.add_argument("-lct", "--low_confidence_threshold", type=float, default=low_confidence_threshold, help="Threshold below which predictions are considered to have low confidence and are not executed in the command model.")
     
-    parser.add_argument("-fct", "--use_function_calling_tools", action=('store_false' if use_function_calling_tools else 'store_true'), help=f"Should we use function calling tools? (default: {use_function_calling_tools})")
+    parser.add_argument("-t", "--function_calling_tools", type=str, nargs='+', help="Include function calling tools. You may define them as a list group(s) (general, discussion) or more precisely by sub group (general.retrieve_data_entry, discussion.retrieve_discussion_by_id) or even by removing certain schema (general, ~general.upsert_data_entry): (default: \"\")", default="")
     
     args = parser.parse_args()
     
@@ -1387,9 +1454,6 @@ def main():
     # Set the Anthropic Claude GPT model
     gpt_model = args.gpt_model
     
-    # Initialize function calling tools
-    use_function_calling_tools = args.use_function_calling_tools
-    
     # Initialize the tool chain with the selected GPT model
     #tool_chain = ToolChain(model=gpt_model)
     
@@ -1399,7 +1463,7 @@ def main():
     # Set the low confidence threshold for the command model
     low_confidence_threshold = args.low_confidence_threshold
     
-    # 
+    # Initialize token calculator for estimating GPT costs
     gpt_token_calculator = GPTTokenCalculator()
     
     # Set the Eleven Labs voice ID
@@ -1445,7 +1509,7 @@ def main():
         else:
             print(f"Summary file ({summary_file}) does not exist.")
     
-    # Set previous conversation summary
+    # Set previous conversation summary, overriding summary file, if exists
     if args.summary:
         summary = args.summary
     
@@ -1463,7 +1527,34 @@ def main():
     
     # Initialize session id for the application via VectorDB class
     session_id = vector_db.create_new_session()
-
+    
+    if not summary:
+        summary = vector_db.retrieve_last_discussion_summaries()
+    
+    # Build up system metadata schema based on the function calling tools dependencities
+    tool_schemas, human_formatted_tools = render_selected_schemas(args.function_calling_tools)
+    system_message_metadata_schema = system_message_metadata_schema.replace("<<tools_part>>", system_message_metadata_schema_tools_part if tool_schemas else "")
+    system_message_metadata = system_message_metadata.\
+        replace("<<response_schema>>", system_message_metadata_schema).\
+        replace("<<tools>>", tool_schemas).\
+        replace("<<tools_epilogue>>", system_message_metadata_tools_epilogue if tool_schemas else "")
+    
+    logger.info(f"System message for metadata: {system_message_metadata}")
+    
+    # Build up common system message
+    system_message_tools_human_format = system_message_tools_human_format.replace("<<tools>>", human_formatted_tools) if tool_schemas else ""
+    system_message = system_message.\
+        replace("<<tools>>", system_message_tools_human_format).\
+        replace("<<username>>", username).\
+        replace("<<persona_description>>", (vector_db.retrieve_data_entry("key", "persona_description")[0].get("value", ""))).\
+        replace("<<discussion_id>>", str(vector_db.current_discussion_id)).\
+        replace("<<previous_discussion>>", str(vector_db.previous_discussion)).\
+        replace("<<first_discussion_date>>", vector_db.first_discussion_date).\
+        replace("<<previous_context>>", previous_context.\
+            replace("<<summary>>", summary) if summary else "")
+    
+    logger.info(f"System message: {system_message}")
+    
     # Start the flush command listener thread
     flush_thread = Thread(target=listen_for_flush_command, daemon=True)
     flush_thread.start()
@@ -1549,6 +1640,11 @@ def main():
         if server_thread:
             server_thread.shutdown()
     finally:
+        logger.info("Shutting down processes...")
+        # Check if there are messages left to be summarized
+        handle_summary_creation(final=True)
+        # Store token cost
+        vector_db.update_discussion_cost(gpt_token_calculator.get_cost())
         # Cleanup the resources and exit the program
         logger.info("Rebuilding vector database index.")
         vector_db.rebuild_index()
